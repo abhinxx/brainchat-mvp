@@ -1,4 +1,4 @@
-const { runBF } = require('../lib/bf-interpreter');
+const brainfuck = require('brainfuck-interpreter');
 const fs = require('fs');
 const path = require('path');
 
@@ -16,6 +16,27 @@ function extractBFCode(source) {
 const ROUTER_CODE = extractBFCode(MODEL_ROUTER_BF);
 const PARSER_CODE = extractBFCode(RESPONSE_PARSER_BF);
 const SCORER_CODE = extractBFCode(CONFIDENCE_SCORER_BF);
+
+// Run BF and capture output
+function runBF(code, input) {
+  let output = '';
+  const tape = new Array(30000).fill(0);
+  let pointer = 0;
+  
+  try {
+    // Use npm brainfuck-interpreter
+    output = brainfuck.execute(code, input);
+  } catch (e) {
+    output = 'M'; // Default on error
+  }
+  
+  return {
+    output: output || 'M',
+    tape: tape.slice(0, 20),
+    pointer: 0,
+    code: code.slice(0, 60)
+  };
+}
 
 // Model mapping
 const MODELS = {
@@ -44,9 +65,10 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // Step 1: Run BF Router to select model
-    const routerResult = runBF(ROUTER_CODE, query.toLowerCase());
-    const modelKey = routerResult.output.trim().charAt(0) || 'M';
+    // Step 1: Run BF Router - pass first char of query
+    const firstChar = query.toLowerCase().charAt(0);
+    const routerResult = runBF(ROUTER_CODE, firstChar);
+    const modelKey = (routerResult.output || 'M').trim().charAt(0) || 'M';
     const model = MODELS[modelKey] || MODELS['M'];
     const modelName = MODEL_NAMES[modelKey] || 'Mistral';
 
@@ -65,12 +87,12 @@ module.exports = async function handler(req, res) {
           {
             role: 'system',
             content: `Respond in TWO parts:
-1. EMOJI: Your answer using only emoji (semantic representation)
+1. EMOJI: Your answer using only emoji
 2. TEXT: The same answer in plain text
 
-Format exactly like this:
-EMOJI: [emoji sequence]
-TEXT: [plain text answer]`
+Format:
+EMOJI: [emojis]
+TEXT: [text]`
           },
           { role: 'user', content: query }
         ]
@@ -86,9 +108,9 @@ TEXT: [plain text answer]`
     const rawResponse = llmData.choices?.[0]?.message?.content || '';
 
     // Step 3: Run BF Parser
-    const parserResult = runBF(PARSER_CODE, rawResponse.slice(0, 100));
+    const parserResult = runBF(PARSER_CODE, rawResponse.slice(0, 50));
     
-    // Extract emoji and text with JS (BF does the work, JS ensures reliability)
+    // Extract emoji and text
     let emoji = '';
     let text = rawResponse;
     
@@ -99,9 +121,9 @@ TEXT: [plain text answer]`
     if (textMatch) text = textMatch[1].trim();
 
     // Step 4: Run BF Confidence Scorer
-    const scorerResult = runBF(SCORER_CODE, text.slice(0, 100));
+    const scorerResult = runBF(SCORER_CODE, text.slice(0, 50));
     
-    // Calculate confidence (BF gives rough score, JS refines)
+    // Calculate confidence from hedge words
     const hedgeWords = ['might', 'could', 'possibly', 'maybe', 'perhaps', 'generally', 'usually', 'typically', 'likely', 'probably'];
     const hedgeCount = hedgeWords.filter(w => text.toLowerCase().includes(w)).length;
     const confidence = Math.max(0, 100 - hedgeCount * 15);
@@ -113,21 +135,16 @@ TEXT: [plain text answer]`
       confidence,
       bf: {
         router: {
-          code: ROUTER_CODE.slice(0, 50) + '...',
-          tape: routerResult.tape,
-          pointer: routerResult.pointer,
+          code: ROUTER_CODE,
+          input: firstChar,
           output: routerResult.output
         },
         parser: {
           code: PARSER_CODE,
-          tape: parserResult.tape,
-          pointer: parserResult.pointer,
           output: parserResult.output
         },
         scorer: {
-          code: SCORER_CODE.slice(0, 50) + '...',
-          tape: scorerResult.tape,
-          pointer: scorerResult.pointer,
+          code: SCORER_CODE,
           output: scorerResult.output
         }
       }
