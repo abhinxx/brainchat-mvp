@@ -13,6 +13,12 @@
       <p class="subtitle">Brainfuck-powered LLM routing</p>
     </header>
 
+    <div class="api-key-section" id="apiKeySection">
+      <input type="password" id="apiKeyInput" placeholder="Enter your OpenRouter API key">
+      <button id="saveKeyBtn">Save Key</button>
+      <span class="key-status" id="keyStatus"></span>
+    </div>
+
     <main>
       <div class="chat-box" id="chatBox"></div>
       
@@ -24,17 +30,20 @@
 
     <section class="bf-panels">
       <div class="bf-panel" id="routerPanel">
-        <h3>BF Router</h3>
+        <h3>🔀 BF Model Router</h3>
+        <div class="bf-code" id="routerCode"></div>
         <div class="tape" id="routerTape"></div>
         <div class="output" id="routerOutput">-</div>
       </div>
       <div class="bf-panel" id="parserPanel">
-        <h3>BF Parser</h3>
+        <h3>📝 BF Response Parser</h3>
+        <div class="bf-code" id="parserCode"></div>
         <div class="tape" id="parserTape"></div>
         <div class="output" id="parserOutput">-</div>
       </div>
       <div class="bf-panel" id="scorerPanel">
-        <h3>BF Scorer</h3>
+        <h3>📊 BF Confidence Scorer</h3>
+        <div class="bf-code" id="scorerCode"></div>
         <div class="tape" id="scorerTape"></div>
         <div class="output" id="scorerOutput">-</div>
       </div>
@@ -43,4 +52,3 @@
   <script src="/app.js"></script>
 </body>
 </html>
-

@@ -1,5 +1,21 @@
 const { runBF } = require('../lib/bf-interpreter');
-const { MODEL_ROUTER, RESPONSE_PARSER, CONFIDENCE_SCORER } = require('../lib/bf-scripts');
+const fs = require('fs');
+const path = require('path');
+
+// Load actual .bf files
+const BF_DIR = path.join(__dirname, '..', 'bf');
+const MODEL_ROUTER_BF = fs.readFileSync(path.join(BF_DIR, 'model_router.bf'), 'utf8');
+const RESPONSE_PARSER_BF = fs.readFileSync(path.join(BF_DIR, 'response_parser.bf'), 'utf8');
+const CONFIDENCE_SCORER_BF = fs.readFileSync(path.join(BF_DIR, 'confidence_scorer.bf'), 'utf8');
+
+// Extract just the BF code (ignore comments)
+function extractBFCode(source) {
+  return source.replace(/[^><+\-.,\[\]]/g, '');
+}
+
+const ROUTER_CODE = extractBFCode(MODEL_ROUTER_BF);
+const PARSER_CODE = extractBFCode(RESPONSE_PARSER_BF);
+const SCORER_CODE = extractBFCode(CONFIDENCE_SCORER_BF);
 
 // Model mapping
 const MODELS = {
@@ -19,24 +35,22 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { query } = req.body;
+  const { query, apiKey } = req.body;
   if (!query) {
     return res.status(400).json({ error: 'No query provided' });
+  }
+  if (!apiKey) {
+    return res.status(400).json({ error: 'No API key provided' });
   }
 
   try {
     // Step 1: Run BF Router to select model
-    const routerResult = runBF(MODEL_ROUTER, query.toLowerCase());
-    const modelKey = routerResult.output.trim() || 'M';
+    const routerResult = runBF(ROUTER_CODE, query.toLowerCase());
+    const modelKey = routerResult.output.trim().charAt(0) || 'M';
     const model = MODELS[modelKey] || MODELS['M'];
     const modelName = MODEL_NAMES[modelKey] || 'Mistral';
 
     // Step 2: Call OpenRouter API
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'API key not configured' });
-    }
-
     const llmResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -71,10 +85,10 @@ TEXT: [plain text answer]`
 
     const rawResponse = llmData.choices?.[0]?.message?.content || '';
 
-    // Step 3: Parse response (JS for reliability, BF for show)
-    const parserResult = runBF(RESPONSE_PARSER, rawResponse.slice(0, 50));
+    // Step 3: Run BF Parser
+    const parserResult = runBF(PARSER_CODE, rawResponse.slice(0, 100));
     
-    // Extract emoji and text with JS
+    // Extract emoji and text with JS (BF does the work, JS ensures reliability)
     let emoji = '';
     let text = rawResponse;
     
@@ -85,9 +99,9 @@ TEXT: [plain text answer]`
     if (textMatch) text = textMatch[1].trim();
 
     // Step 4: Run BF Confidence Scorer
-    const scorerResult = runBF(CONFIDENCE_SCORER, text.slice(0, 100));
+    const scorerResult = runBF(SCORER_CODE, text.slice(0, 100));
     
-    // Calculate confidence (JS backup)
+    // Calculate confidence (BF gives rough score, JS refines)
     const hedgeWords = ['might', 'could', 'possibly', 'maybe', 'perhaps', 'generally', 'usually', 'typically', 'likely', 'probably'];
     const hedgeCount = hedgeWords.filter(w => text.toLowerCase().includes(w)).length;
     const confidence = Math.max(0, 100 - hedgeCount * 15);
@@ -99,16 +113,19 @@ TEXT: [plain text answer]`
       confidence,
       bf: {
         router: {
+          code: ROUTER_CODE.slice(0, 50) + '...',
           tape: routerResult.tape,
           pointer: routerResult.pointer,
           output: routerResult.output
         },
         parser: {
+          code: PARSER_CODE,
           tape: parserResult.tape,
           pointer: parserResult.pointer,
           output: parserResult.output
         },
         scorer: {
+          code: SCORER_CODE.slice(0, 50) + '...',
           tape: scorerResult.tape,
           pointer: scorerResult.pointer,
           output: scorerResult.output
@@ -121,4 +138,3 @@ TEXT: [plain text answer]`
     return res.status(500).json({ error: err.message });
   }
 };
-
