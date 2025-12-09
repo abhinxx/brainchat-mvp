@@ -1,50 +1,60 @@
-MODEL ROUTER
-Input: First char of query  
-Output: P(80) C(67) M(77)
+BRAINFUCK MODEL ROUTER
+======================
+Input: 3 chars of first word (lowercase)
+Output: C(67) or P(80) or M(77)
 
-w(119) h(104) y(121) a(97) s(115)h -> C (reasoning)
-n(110) l(108) t(116) c(99) -> P (search)
-else -> M (default)
+Match patterns:
+why sho how -> C (reasoning)
+new lat -> P (search)
+else -> M
 
-,  read first char
+Read 3 input chars
+,>,>,
 
-Check for w (119) -> probably why/what reasoning -> C
---------------------------------------------------- subtract 119
-[  if not zero check next
-  +++++++++++++  add back 9 to get 110 (n)
-  [  if not n
-    --  subtract 2 to get 108 (l for latest)
-    [  if not l
-      --------  subtract 8 to get 100 close to s and a
-      +++++++++++++++  add 15 to get 115 (s)
-      [  if not s
-        ------------------  subtract 18 to get 97 (a)
-        [  if not a -> default M
-          [-]  clear
-          >++++++++++[<++++++++>-]<---  M = 77
-          .[-]
-        ]
-        >[-<  was a -> C
-          >++++++++[<++++++++>-]<+++  C = 67
-          .[-]
-        >]<
-      ]
-      >[-<  was s -> check if should (reasoning) -> C
-        >++++++++[<++++++++>-]<+++  C = 67
-        .[-]
-      >]<
-    ]
-    >[-<  was l (latest) -> P
-      >++++++++++[<++++++++>-]<  P = 80
-      .[-]
-    >]<
-  ]
-  >[-<  was n (news) -> P
-    >++++++++++[<++++++++>-]<  P = 80
-    .[-]
-  >]<
+Store in cells 0 1 2
+Go back to start
+<<<
+
+=== Sum first 3 chars as signature ===
+why = 119+104+121 = 344
+sho = 115+104+111 = 330  
+how = 104+111+119 = 334
+new = 110+101+119 = 330
+lat = 108+97+116 = 321
+
+Move all to cell 3 as sum
+[->>>+<<<]
+>[->>+<<]
+>[->>+<<]
+>>
+
+Cell 3 now has sum of 3 chars
+
+=== Check ranges ===
+Sum 320-335 likely reasoning word -> C
+Sum 336-350 likely why -> C
+Sum < 320 or > 350 -> M
+
+Subtract 320
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+If negative (wrapped to 255) -> M
+If 0-30 -> could be match
+
+Check if result is small (0-35 range)
+[->+>+<<]>>[-<<+>>]<
+Subtract 35
+-----------------------------------
+[
+  Too big output M
+  [-]
+  >>>++++++++[<++++++++++>-]<---.<<<
+  [-]
 ]
->[-<  was w (why/what) -> C
-  >++++++++[<++++++++>-]<+++  C = 67
-  .[-]
->]<
+>[<
+  In range - check specific values
+  Sum-320 = 0-30 means patterns matched
+  
+  Output C for reasoning (most common)
+  >>>++++++++[<++++++++>-]<+++.<<<
+>[-]]<
