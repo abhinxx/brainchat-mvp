@@ -4,51 +4,121 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BrainChat</title>
-  <link rel="stylesheet" href="/style.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            bg: '#0a0a0f',
+            surface: '#12121a',
+            border: '#2a2a3a',
+            accent: '#00ff9d',
+          },
+          fontFamily: {
+            mono: ['SF Mono', 'Fira Code', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .tape-cell { min-width: 28px; }
+    .bf-code::-webkit-scrollbar { height: 4px; }
+    .bf-code::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 2px; }
+  </style>
 </head>
-<body>
-  <div class="container">
-    <header>
-      <h1>🧠 BrainChat</h1>
-      <p class="subtitle">Brainfuck-powered LLM routing</p>
-    </header>
+<body class="bg-bg text-gray-200 font-mono min-h-screen">
+  
+  <!-- SPLIT LAYOUT -->
+  <div class="flex h-screen">
+    
+    <!-- LEFT: Chat Interface -->
+    <div class="w-1/2 border-r border-border flex flex-col">
+      <header class="p-6 border-b border-border">
+        <h1 class="text-3xl font-bold text-accent">🧠 BrainChat</h1>
+        <p class="text-gray-500 text-sm mt-1">Brainfuck-powered LLM routing</p>
+      </header>
 
-    <div class="api-key-section" id="apiKeySection">
-      <input type="password" id="apiKeyInput" placeholder="Enter your OpenRouter API key">
-      <button id="saveKeyBtn">Save Key</button>
-      <span class="key-status" id="keyStatus"></span>
+      <div class="p-4 border-b border-border bg-surface">
+        <div class="flex gap-2">
+          <input type="password" id="apiKeyInput" placeholder="OpenRouter API Key" 
+                 class="flex-1 px-3 py-2 bg-bg border border-border rounded text-sm focus:border-accent focus:outline-none">
+          <button id="saveKeyBtn" class="px-4 py-2 bg-accent text-bg font-bold rounded text-sm hover:bg-green-400">Save</button>
+        </div>
+        <span id="keyStatus" class="text-xs text-accent mt-1 block"></span>
+      </div>
+
+      <div id="chatBox" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+
+      <form id="chatForm" class="p-4 border-t border-border bg-surface">
+        <div class="flex gap-2">
+          <input type="text" id="queryInput" placeholder="Ask something..." autocomplete="off" required
+                 class="flex-1 px-4 py-3 bg-bg border border-border rounded-lg focus:border-accent focus:outline-none">
+          <button type="submit" class="px-6 py-3 bg-accent text-bg font-bold rounded-lg hover:bg-green-400 disabled:opacity-50">Send</button>
+        </div>
+      </form>
     </div>
 
-    <main>
-      <div class="chat-box" id="chatBox"></div>
-      
-      <form id="chatForm" class="input-area">
-        <input type="text" id="queryInput" placeholder="Ask something..." autocomplete="off" required>
-        <button type="submit">Send</button>
-      </form>
-    </main>
+    <!-- RIGHT: Brainfuck Execution Panel -->
+    <div class="w-1/2 bg-surface flex flex-col overflow-hidden">
+      <header class="p-6 border-b border-border">
+        <h2 class="text-xl font-bold text-accent">⚡ Brainfuck Execution</h2>
+        <p class="text-gray-500 text-sm mt-1">Real-time visualization of BF processes</p>
+      </header>
 
-    <section class="bf-panels">
-      <div class="bf-panel" id="routerPanel">
-        <h3>🔀 BF Model Router</h3>
-        <div class="bf-code" id="routerCode"></div>
-        <div class="tape" id="routerTape"></div>
-        <div class="output" id="routerOutput">-</div>
+      <div class="flex-1 overflow-y-auto p-4 space-y-4">
+        
+        <!-- Router Panel -->
+        <div class="bg-bg border border-border rounded-lg p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-accent font-bold">🔀 Model Router</h3>
+            <span id="routerOutput" class="text-sm text-gray-400">waiting...</span>
+          </div>
+          <div class="bg-surface rounded p-2 mb-3 overflow-x-auto">
+            <code id="routerCode" class="text-xs text-pink-400 bf-code whitespace-nowrap block">-</code>
+          </div>
+          <div class="flex items-center gap-1">
+            <span class="text-xs text-gray-500 mr-2">Memory:</span>
+            <div id="routerTape" class="flex gap-1 overflow-x-auto pb-1"></div>
+          </div>
+        </div>
+
+        <!-- Parser Panel -->
+        <div class="bg-bg border border-border rounded-lg p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-accent font-bold">📝 Response Parser</h3>
+            <span id="parserOutput" class="text-sm text-gray-400">waiting...</span>
+          </div>
+          <div class="bg-surface rounded p-2 mb-3 overflow-x-auto">
+            <code id="parserCode" class="text-xs text-pink-400 bf-code whitespace-nowrap block">-</code>
+          </div>
+          <div class="flex items-center gap-1">
+            <span class="text-xs text-gray-500 mr-2">Memory:</span>
+            <div id="parserTape" class="flex gap-1 overflow-x-auto pb-1"></div>
+          </div>
+        </div>
+
+        <!-- Scorer Panel -->
+        <div class="bg-bg border border-border rounded-lg p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-accent font-bold">📊 Confidence Scorer</h3>
+            <span id="scorerOutput" class="text-sm text-gray-400">waiting...</span>
+          </div>
+          <div class="bg-surface rounded p-2 mb-3 overflow-x-auto">
+            <code id="scorerCode" class="text-xs text-pink-400 bf-code whitespace-nowrap block">-</code>
+          </div>
+          <div class="flex items-center gap-1">
+            <span class="text-xs text-gray-500 mr-2">Memory:</span>
+            <div id="scorerTape" class="flex gap-1 overflow-x-auto pb-1"></div>
+          </div>
+        </div>
+
       </div>
-      <div class="bf-panel" id="parserPanel">
-        <h3>📝 BF Response Parser</h3>
-        <div class="bf-code" id="parserCode"></div>
-        <div class="tape" id="parserTape"></div>
-        <div class="output" id="parserOutput">-</div>
-      </div>
-      <div class="bf-panel" id="scorerPanel">
-        <h3>📊 BF Confidence Scorer</h3>
-        <div class="bf-code" id="scorerCode"></div>
-        <div class="tape" id="scorerTape"></div>
-        <div class="output" id="scorerOutput">-</div>
-      </div>
-    </section>
+    </div>
+
   </div>
+
   <script src="/app.js"></script>
 </body>
 </html>
