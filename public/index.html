@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BrainChat</title>
+  <title>BrainChat - EWOR Case Study</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -22,102 +22,164 @@
       }
     }
   </script>
-  <style>
-    .tape-cell { min-width: 28px; }
-    .bf-code::-webkit-scrollbar { height: 4px; }
-    .bf-code::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 2px; }
-  </style>
 </head>
-<body class="bg-bg text-gray-200 font-mono min-h-screen">
+<body class="bg-bg text-gray-200 font-mono">
   
-  <!-- SPLIT LAYOUT -->
-  <div class="flex h-screen">
-    
-    <!-- LEFT: Chat Interface -->
-    <div class="w-1/2 border-r border-border flex flex-col">
-      <header class="p-6 border-b border-border">
-        <h1 class="text-3xl font-bold text-accent">🧠 BrainChat</h1>
-        <p class="text-gray-500 text-sm mt-1">Brainfuck-powered LLM routing</p>
-      </header>
+  <!-- HERO / CONTEXT -->
+  <header class="border-b border-border">
+    <div class="max-w-6xl mx-auto px-6 py-8">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-4xl font-bold text-accent">🧠 BrainChat</h1>
+          <p class="text-gray-400 mt-2">EWOR Technical Case Study: Chat Application in Brainfuck</p>
+        </div>
+        <a href="https://github.com/abhinxx/brainchat-mvp" target="_blank" class="text-gray-400 hover:text-accent text-sm">View Source →</a>
+      </div>
+      
+      <!-- THE PITCH -->
+      <div class="mt-6 p-4 bg-surface border border-border rounded-lg">
+        <p class="text-sm text-gray-300">
+          <span class="text-accent font-bold">The Challenge:</span> Build a chat server/client in Brainfuck.<br>
+          <span class="text-accent font-bold">The Solution:</span> Brainfuck handles <u>real business logic</u> — model routing, response parsing, and confidence scoring — not just decoration.
+        </p>
+      </div>
+    </div>
+  </header>
 
-      <div class="p-4 border-b border-border bg-surface">
-        <div class="flex gap-2">
+  <!-- HOW IT WORKS -->
+  <section class="border-b border-border bg-surface">
+    <div class="max-w-6xl mx-auto px-6 py-6">
+      <h2 class="text-lg font-bold text-accent mb-4">⚡ How It Works (The Flow)</h2>
+      <div class="flex items-center justify-between text-xs text-center gap-2">
+        <div class="flex-1 p-3 bg-bg border border-border rounded">
+          <div class="text-2xl mb-1">💬</div>
+          <div class="text-gray-400">Your Query</div>
+        </div>
+        <div class="text-accent">→</div>
+        <div class="flex-1 p-3 bg-bg border border-accent rounded">
+          <div class="text-2xl mb-1">🔀</div>
+          <div class="text-accent font-bold">BF Router</div>
+          <div class="text-gray-500 text-[10px]">Selects LLM</div>
+        </div>
+        <div class="text-accent">→</div>
+        <div class="flex-1 p-3 bg-bg border border-border rounded">
+          <div class="text-2xl mb-1">🤖</div>
+          <div class="text-gray-400">OpenRouter API</div>
+          <div class="text-gray-500 text-[10px]">GPT/Perplexity/Mistral</div>
+        </div>
+        <div class="text-accent">→</div>
+        <div class="flex-1 p-3 bg-bg border border-accent rounded">
+          <div class="text-2xl mb-1">📝</div>
+          <div class="text-accent font-bold">BF Parser</div>
+          <div class="text-gray-500 text-[10px]">Extracts emoji+text</div>
+        </div>
+        <div class="text-accent">→</div>
+        <div class="flex-1 p-3 bg-bg border border-accent rounded">
+          <div class="text-2xl mb-1">📊</div>
+          <div class="text-accent font-bold">BF Scorer</div>
+          <div class="text-gray-500 text-[10px]">Confidence %</div>
+        </div>
+        <div class="text-accent">→</div>
+        <div class="flex-1 p-3 bg-bg border border-border rounded">
+          <div class="text-2xl mb-1">✅</div>
+          <div class="text-gray-400">Response</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MAIN INTERFACE -->
+  <main class="max-w-6xl mx-auto px-6 py-6">
+    <div class="grid grid-cols-2 gap-6">
+      
+      <!-- LEFT: Chat -->
+      <div>
+        <div class="flex items-center gap-2 mb-4">
           <input type="password" id="apiKeyInput" placeholder="OpenRouter API Key" 
-                 class="flex-1 px-3 py-2 bg-bg border border-border rounded text-sm focus:border-accent focus:outline-none">
-          <button id="saveKeyBtn" class="px-4 py-2 bg-accent text-bg font-bold rounded text-sm hover:bg-green-400">Save</button>
+                 class="flex-1 px-3 py-2 bg-surface border border-border rounded text-sm focus:border-accent focus:outline-none">
+          <button id="saveKeyBtn" class="px-4 py-2 bg-accent text-bg font-bold rounded text-sm">Save</button>
+          <span id="keyStatus" class="text-xs text-accent"></span>
         </div>
-        <span id="keyStatus" class="text-xs text-accent mt-1 block"></span>
-      </div>
 
-      <div id="chatBox" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+        <div id="chatBox" class="h-64 overflow-y-auto bg-surface border border-border rounded-lg p-4 space-y-3 mb-4"></div>
 
-      <form id="chatForm" class="p-4 border-t border-border bg-surface">
-        <div class="flex gap-2">
-          <input type="text" id="queryInput" placeholder="Ask something..." autocomplete="off" required
-                 class="flex-1 px-4 py-3 bg-bg border border-border rounded-lg focus:border-accent focus:outline-none">
+        <form id="chatForm" class="flex gap-2">
+          <input type="text" id="queryInput" placeholder="Try: 'What's the latest news in France?'" autocomplete="off" required
+                 class="flex-1 px-4 py-3 bg-surface border border-border rounded-lg focus:border-accent focus:outline-none">
           <button type="submit" class="px-6 py-3 bg-accent text-bg font-bold rounded-lg hover:bg-green-400 disabled:opacity-50">Send</button>
-        </div>
-      </form>
-    </div>
-
-    <!-- RIGHT: Brainfuck Execution Panel -->
-    <div class="w-1/2 bg-surface flex flex-col overflow-hidden">
-      <header class="p-6 border-b border-border">
-        <h2 class="text-xl font-bold text-accent">⚡ Brainfuck Execution</h2>
-        <p class="text-gray-500 text-sm mt-1">Real-time visualization of BF processes</p>
-      </header>
-
-      <div class="flex-1 overflow-y-auto p-4 space-y-4">
+        </form>
         
-        <!-- Router Panel -->
-        <div class="bg-bg border border-border rounded-lg p-4">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="text-accent font-bold">🔀 Model Router</h3>
-            <span id="routerOutput" class="text-sm text-gray-400">waiting...</span>
+        <p class="text-xs text-gray-500 mt-2">
+          💡 Try queries with "news", "latest", "search" (→ Perplexity) or "analyze", "explain" (→ ChatGPT)
+        </p>
+      </div>
+
+      <!-- RIGHT: BF Execution -->
+      <div class="space-y-4">
+        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wide">Live Brainfuck Execution</h3>
+        
+        <!-- Router -->
+        <div class="bg-surface border border-border rounded-lg p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-accent font-bold text-sm">🔀 Model Router</span>
+            <span id="routerOutput" class="text-xs text-gray-500">waiting...</span>
           </div>
-          <div class="bg-surface rounded p-2 mb-3 overflow-x-auto">
-            <code id="routerCode" class="text-xs text-pink-400 bf-code whitespace-nowrap block">-</code>
-          </div>
-          <div class="flex items-center gap-1">
-            <span class="text-xs text-gray-500 mr-2">Memory:</span>
-            <div id="routerTape" class="flex gap-1 overflow-x-auto pb-1"></div>
+          <p class="text-[10px] text-gray-500 mb-2">Reads query keywords → outputs model selection (P=Perplexity, C=ChatGPT, M=Mistral)</p>
+          <code id="routerCode" class="block text-[10px] text-pink-400 bg-bg p-2 rounded overflow-x-auto whitespace-nowrap mb-2">-</code>
+          <div class="flex items-center gap-1 text-[10px]">
+            <span class="text-gray-500">Memory:</span>
+            <div id="routerTape" class="flex gap-0.5"></div>
           </div>
         </div>
 
-        <!-- Parser Panel -->
-        <div class="bg-bg border border-border rounded-lg p-4">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="text-accent font-bold">📝 Response Parser</h3>
-            <span id="parserOutput" class="text-sm text-gray-400">waiting...</span>
+        <!-- Parser -->
+        <div class="bg-surface border border-border rounded-lg p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-accent font-bold text-sm">📝 Response Parser</span>
+            <span id="parserOutput" class="text-xs text-gray-500">waiting...</span>
           </div>
-          <div class="bg-surface rounded p-2 mb-3 overflow-x-auto">
-            <code id="parserCode" class="text-xs text-pink-400 bf-code whitespace-nowrap block">-</code>
-          </div>
-          <div class="flex items-center gap-1">
-            <span class="text-xs text-gray-500 mr-2">Memory:</span>
-            <div id="parserTape" class="flex gap-1 overflow-x-auto pb-1"></div>
-          </div>
-        </div>
-
-        <!-- Scorer Panel -->
-        <div class="bg-bg border border-border rounded-lg p-4">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="text-accent font-bold">📊 Confidence Scorer</h3>
-            <span id="scorerOutput" class="text-sm text-gray-400">waiting...</span>
-          </div>
-          <div class="bg-surface rounded p-2 mb-3 overflow-x-auto">
-            <code id="scorerCode" class="text-xs text-pink-400 bf-code whitespace-nowrap block">-</code>
-          </div>
-          <div class="flex items-center gap-1">
-            <span class="text-xs text-gray-500 mr-2">Memory:</span>
-            <div id="scorerTape" class="flex gap-1 overflow-x-auto pb-1"></div>
+          <p class="text-[10px] text-gray-500 mb-2">Processes LLM response → extracts EMOJI: and TEXT: sections</p>
+          <code id="parserCode" class="block text-[10px] text-pink-400 bg-bg p-2 rounded overflow-x-auto whitespace-nowrap mb-2">-</code>
+          <div class="flex items-center gap-1 text-[10px]">
+            <span class="text-gray-500">Memory:</span>
+            <div id="parserTape" class="flex gap-0.5"></div>
           </div>
         </div>
 
+        <!-- Scorer -->
+        <div class="bg-surface border border-border rounded-lg p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-accent font-bold text-sm">📊 Confidence Scorer</span>
+            <span id="scorerOutput" class="text-xs text-gray-500">waiting...</span>
+          </div>
+          <p class="text-[10px] text-gray-500 mb-2">Analyzes text for hedge words ("might", "possibly") → outputs confidence %</p>
+          <code id="scorerCode" class="block text-[10px] text-pink-400 bg-bg p-2 rounded overflow-x-auto whitespace-nowrap mb-2">-</code>
+          <div class="flex items-center gap-1 text-[10px]">
+            <span class="text-gray-500">Memory:</span>
+            <div id="scorerTape" class="flex gap-0.5"></div>
+          </div>
+        </div>
       </div>
     </div>
+  </main>
 
-  </div>
+  <!-- FOOTER: Technical Details -->
+  <footer class="border-t border-border mt-8">
+    <div class="max-w-6xl mx-auto px-6 py-6">
+      <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wide mb-3">Why This Matters</h3>
+      <div class="grid grid-cols-3 gap-4 text-xs text-gray-400">
+        <div>
+          <span class="text-accent">✓</span> Brainfuck does <u>real work</u> — routing, parsing, scoring
+        </div>
+        <div>
+          <span class="text-accent">✓</span> Multi-model orchestration (Perplexity/GPT/Mistral)
+        </div>
+        <div>
+          <span class="text-accent">✓</span> Confidence scoring addresses AI hallucination awareness
+        </div>
+      </div>
+    </div>
+  </footer>
 
   <script src="/app.js"></script>
 </body>
