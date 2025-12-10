@@ -24,7 +24,7 @@ const SEARCH_WORDS = ['news', 'latest', 'current', 'today', 'recent', 'update', 
 // Model mapping
 const MODELS = {
   'P': 'perplexity/sonar-pro',
-  'C': 'openai/gpt-5.1',
+  'C': 'openai/gpt-4o',
   'M': 'mistralai/mistral-large-latest'
 };
 
