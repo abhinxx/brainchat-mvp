@@ -24,7 +24,7 @@ const SEARCH_WORDS = ['news', 'latest', 'current', 'today', 'recent', 'update', 
 // Model mapping
 const MODELS = {
   'P': 'perplexity/sonar-pro',
-  'C': 'openai/gpt-4o',
+  'C': 'openai/gpt-5.1',
   'M': 'mistralai/mistral-large-latest'
 };
 
@@ -98,14 +98,23 @@ module.exports = async function handler(req, res) {
       })
     });
 
-    // FIX: Check response before parsing JSON
-    if (!llmRes.ok) {
-      const errorText = await llmRes.text();
-      return res.status(500).json({ error: `API error: ${llmRes.status} - ${errorText.slice(0, 100)}` });
+    // Get response text first, then try to parse
+    const responseText = await llmRes.text();
+    
+    // Try to parse as JSON
+    let llmData;
+    try {
+      llmData = JSON.parse(responseText);
+    } catch (e) {
+      // Not JSON - return the actual error text
+      return res.status(500).json({ 
+        error: `API returned non-JSON (status ${llmRes.status}): ${responseText.slice(0, 200)}` 
+      });
     }
-
-    const llmData = await llmRes.json();
-    if (llmData.error) return res.status(500).json({ error: llmData.error.message });
+    
+    if (llmData.error) {
+      return res.status(500).json({ error: llmData.error.message || JSON.stringify(llmData.error) });
+    }
 
     const raw = llmData.choices?.[0]?.message?.content || '';
 
