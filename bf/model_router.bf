@@ -39,7 +39,7 @@ Memory layout:
 
 =============== COMPUTE SUM INTO CELL 5 ===============
 Move all values to cell 5
-<<<<< go to cell 0
+<<<< go to cell 0 (from cell 4 after reading)
 [->>>>+>+<<<<<] copy cell0 to cell4 and cell5
 >>>>[-<<<<+>>>>]<<<< restore cell0
 
