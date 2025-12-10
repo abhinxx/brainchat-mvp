@@ -1,30 +1,43 @@
-const brainfuck = require('brainfuck-interpreter');
-const fs = require('fs');
-const path = require('path');
+let brainfuck, fs, path;
+let ROUTER_CODE = '', PARSER_CODE = '', SCORER_CODE = '';
+let initError = null;
 
-// Load .bf files
-const BF_DIR = path.join(__dirname, '..', 'bf');
-const MODEL_ROUTER_BF = fs.readFileSync(path.join(BF_DIR, 'model_router.bf'), 'utf8');
-const RESPONSE_PARSER_BF = fs.readFileSync(path.join(BF_DIR, 'response_parser.bf'), 'utf8');
-const CONFIDENCE_SCORER_BF = fs.readFileSync(path.join(BF_DIR, 'confidence_scorer.bf'), 'utf8');
+// Wrap all initialization in try-catch
+try {
+  brainfuck = require('brainfuck-interpreter');
+  fs = require('fs');
+  path = require('path');
 
-// Extract BF code only
-function extractBF(source) {
-  return source.replace(/[^><+\-.,\[\]]/g, '');
+  const BF_DIR = path.join(__dirname, '..', 'bf');
+  
+  function extractBF(source) {
+    return source.replace(/[^><+\-.,\[\]]/g, '');
+  }
+
+  try {
+    ROUTER_CODE = extractBF(fs.readFileSync(path.join(BF_DIR, 'model_router.bf'), 'utf8'));
+  } catch (e) {
+    initError = 'Failed to load model_router.bf: ' + e.message;
+  }
+  
+  try {
+    PARSER_CODE = extractBF(fs.readFileSync(path.join(BF_DIR, 'response_parser.bf'), 'utf8'));
+  } catch (e) {
+    initError = 'Failed to load response_parser.bf: ' + e.message;
+  }
+  
+  try {
+    SCORER_CODE = extractBF(fs.readFileSync(path.join(BF_DIR, 'confidence_scorer.bf'), 'utf8'));
+  } catch (e) {
+    initError = 'Failed to load confidence_scorer.bf: ' + e.message;
+  }
+} catch (e) {
+  initError = 'Module init failed: ' + e.message;
 }
 
-const ROUTER_CODE = extractBF(MODEL_ROUTER_BF);
-const PARSER_CODE = extractBF(RESPONSE_PARSER_BF);
-const SCORER_CODE = extractBF(CONFIDENCE_SCORER_BF);
-
-// Keywords for routing - BF will scan for these
-const REASONING_WORDS = ['should', 'why', 'how', 'analyze', 'explain', 'compare', 'evaluate', 'think', 'reason', 'advice', 'recommend', 'decide', 'better', 'worth', 'pros', 'cons'];
-const SEARCH_WORDS = ['news', 'latest', 'current', 'today', 'recent', 'update', 'trending', 'search'];
-
-// Model mapping
 const MODELS = {
   'P': 'perplexity/sonar-pro',
-  'C': 'openai/gpt-5.1',
+  'C': 'openai/gpt-4o-mini',
   'M': 'mistralai/mistral-large-latest'
 };
 
@@ -35,41 +48,45 @@ const MODEL_NAMES = {
 };
 
 module.exports = async function handler(req, res) {
+  // Check init error first
+  if (initError) {
+    return res.status(500).json({ error: initError });
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { query, apiKey } = req.body;
-  if (!query) return res.status(400).json({ error: 'No query' });
-  if (!apiKey) return res.status(400).json({ error: 'No API key' });
+  const { query, apiKey } = req.body || {};
+  if (!query) return res.status(400).json({ error: 'No query provided' });
+  if (!apiKey) return res.status(400).json({ error: 'No API key provided' });
 
   try {
-    // Scan query for keywords - pass each word to BF for matching
+    // BF Router - scan words
     const words = query.toLowerCase().split(/\s+/);
     let matchedWord = null;
     let modelKey = 'M';
     let routerOutput = '';
     let allScans = [];
 
-    // BF scans each word
     for (const word of words) {
-      const wordChars = (word + '   ').slice(0, 5); // 5 chars for matching
+      const wordChars = (word + '     ').slice(0, 5);
+      let output = 'M';
       try {
-        const output = brainfuck.execute(ROUTER_CODE, wordChars) || '';
-        allScans.push({ word, output: output.trim() });
-        
-        // Check if BF found a match
-        if (output.includes('C') && !matchedWord) {
-          matchedWord = word;
-          modelKey = 'C';
-          routerOutput = output;
-        } else if (output.includes('P') && !matchedWord) {
-          matchedWord = word;
-          modelKey = 'P';
-          routerOutput = output;
-        }
+        output = brainfuck.execute(ROUTER_CODE, wordChars) || 'M';
       } catch (e) {
-        allScans.push({ word, output: 'error' });
+        output = 'BF_ERROR';
+      }
+      allScans.push({ word, output: output.trim() });
+      
+      if (output.includes('C') && !matchedWord) {
+        matchedWord = word;
+        modelKey = 'C';
+        routerOutput = output;
+      } else if (output.includes('P') && !matchedWord) {
+        matchedWord = word;
+        modelKey = 'P';
+        routerOutput = output;
       }
     }
 
@@ -77,48 +94,59 @@ module.exports = async function handler(req, res) {
     const model = MODELS[modelKey] || MODELS['M'];
     const modelName = MODEL_NAMES[modelKey] || 'Mistral';
 
-    // Call OpenRouter
-    const llmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://brainchat.vercel.app',
-        'X-Title': 'BrainChat'
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: 'system',
-            content: 'Respond in TWO parts:\n1. EMOJI: Answer in emoji only\n2. TEXT: Same answer in plain text\n\nFormat:\nEMOJI: [emojis]\nTEXT: [text]'
-          },
-          { role: 'user', content: query }
-        ]
-      })
-    });
+    // Call OpenRouter API
+    let llmRes;
+    try {
+      llmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://brainchat.vercel.app',
+          'X-Title': 'BrainChat'
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: 'system',
+              content: 'Respond in TWO parts:\n1. EMOJI: Answer in emoji only\n2. TEXT: Same answer in plain text\n\nFormat:\nEMOJI: [emojis]\nTEXT: [text]'
+            },
+            { role: 'user', content: query }
+          ]
+        })
+      });
+    } catch (fetchErr) {
+      return res.status(500).json({ error: 'Fetch failed: ' + fetchErr.message });
+    }
 
-    // Get response text first, then try to parse
-    const responseText = await llmRes.text();
-    
-    // Try to parse as JSON
+    // Get response as text first
+    let responseText;
+    try {
+      responseText = await llmRes.text();
+    } catch (e) {
+      return res.status(500).json({ error: 'Failed to read response: ' + e.message });
+    }
+
+    // Parse JSON
     let llmData;
     try {
       llmData = JSON.parse(responseText);
     } catch (e) {
-      // Not JSON - return the actual error text
       return res.status(500).json({ 
-        error: `API returned non-JSON (status ${llmRes.status}): ${responseText.slice(0, 200)}` 
+        error: 'Invalid JSON from API',
+        status: llmRes.status,
+        response: responseText.slice(0, 300)
       });
     }
-    
+
     if (llmData.error) {
       return res.status(500).json({ error: llmData.error.message || JSON.stringify(llmData.error) });
     }
 
     const raw = llmData.choices?.[0]?.message?.content || '';
 
-    // Run BF Parser
+    // BF Parser
     let parserOutput = '';
     try {
       parserOutput = brainfuck.execute(PARSER_CODE, raw.slice(0, 50)) || '';
@@ -131,13 +159,13 @@ module.exports = async function handler(req, res) {
     if (em) emoji = em[1].trim();
     if (tx) text = tx[1].trim();
 
-    // Run BF Scorer
+    // BF Scorer
     let scorerOutput = '';
     try {
       scorerOutput = brainfuck.execute(SCORER_CODE, text.slice(0, 50)) || '';
     } catch (e) {}
 
-    // Calculate confidence
+    // Confidence calculation
     const hedges = ['might', 'could', 'possibly', 'maybe', 'perhaps', 'generally', 'usually', 'typically', 'likely', 'probably'];
     const hedgeCount = hedges.filter(w => text.toLowerCase().includes(w)).length;
     const confidence = Math.max(0, 100 - hedgeCount * 15);
@@ -149,19 +177,13 @@ module.exports = async function handler(req, res) {
       confidence,
       matchedWord,
       bf: {
-        router: { 
-          code: ROUTER_CODE, 
-          scans: allScans,
-          matchedWord,
-          output: routerOutput 
-        },
-        parser: { code: PARSER_CODE, output: parserOutput },
-        scorer: { code: SCORER_CODE, output: scorerOutput }
+        router: { code: ROUTER_CODE.slice(0, 100), scans: allScans, output: routerOutput },
+        parser: { code: PARSER_CODE.slice(0, 100), output: parserOutput },
+        scorer: { code: SCORER_CODE.slice(0, 100), output: scorerOutput }
       }
     });
 
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Handler error: ' + err.message, stack: err.stack?.slice(0, 500) });
   }
 };
