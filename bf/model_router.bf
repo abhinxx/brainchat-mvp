@@ -1,60 +1,122 @@
-BRAINFUCK MODEL ROUTER
-======================
-Input: 3 chars of first word (lowercase)
-Output: C(67) or P(80) or M(77)
+BRAINFUCK MODEL ROUTER v2
+=========================
+Full word pattern matching
+Input: 5 characters of a word
+Output: P (Perplexity) C (ChatGPT) M (Mistral)
 
-Match patterns:
-why sho how -> C (reasoning)
-new lat -> P (search)
-else -> M
+REASONING WORDS (output C=67):
+shoul (115 104 111 117 108) = 555
+why__ (119 104 121 32 32) = 408  
+how__ (104 111 119 32 32) = 398
+analy (97 110 97 108 121) = 533
+expla (101 120 112 108 97) = 538
+compa (99 111 109 112 97) = 528
+think (116 104 105 110 107) = 542
+reaso (114 101 97 115 111) = 538
+advis (97 100 118 105 115) = 535
+recom (114 101 99 111 109) = 534
+decid (100 101 99 105 100) = 505
+bette (98 101 116 116 101) = 532
 
-Read 3 input chars
-,>,>,
+SEARCH WORDS (output P=80):
+news_ (110 101 119 115 32) = 477
+lates (108 97 116 101 115) = 537
+curre (99 117 114 114 101) = 545
+today (116 111 100 97 121) = 545
+recen (114 101 99 101 110) = 525
+updat (117 112 100 97 116) = 542
+trend (116 114 101 110 100) = 541
+searc (115 101 97 114 99) = 526
 
-Store in cells 0 1 2
-Go back to start
-<<<
+Memory layout:
+[0-4] = 5 input characters
+[5] = sum accumulator
+[6] = result flag
+[7+] = temp working space
 
-=== Sum first 3 chars as signature ===
-why = 119+104+121 = 344
-sho = 115+104+111 = 330  
-how = 104+111+119 = 334
-new = 110+101+119 = 330
-lat = 108+97+116 = 321
+=============== READ 5 CHARACTERS ===============
+,>,>,>,>,
 
-Move all to cell 3 as sum
-[->>>+<<<]
->[->>+<<]
->[->>+<<]
->>
+=============== COMPUTE SUM INTO CELL 5 ===============
+Move all values to cell 5
+<<<<< go to cell 0
+[->>>>+>+<<<<<] copy cell0 to cell4 and cell5
+>>>>[-<<<<+>>>>]<<<< restore cell0
 
-Cell 3 now has sum of 3 chars
+> go to cell 1
+[->>>+>+<<<<] copy cell1 to cell4 and cell5
+>>>[-<<<+>>>]<<<
 
-=== Check ranges ===
-Sum 320-335 likely reasoning word -> C
-Sum 336-350 likely why -> C
-Sum < 320 or > 350 -> M
+> go to cell 2
+[->>+>+<<<] copy cell2 to cell4 and cell5
+>>[-<<+>>]<<
 
-Subtract 320
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+> go to cell 3
+[->+>+<<] copy cell3 to cell4 and cell5
+>[-<+>]<
 
-If negative (wrapped to 255) -> M
-If 0-30 -> could be match
+> go to cell 4
+[->+<] add cell4 to cell5
+>
 
-Check if result is small (0-35 range)
+Cell 5 now has sum of all 5 chars
+
+=============== CHECK REASONING PATTERNS ===============
+Sum ranges for reasoning words: 398-555
+Subtract 390 first
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+If result is 0-170 we might have a match
+Check if in range by subtracting 170
+Copy to temp first
 [->+>+<<]>>[-<<+>>]<
-Subtract 35
------------------------------------
-[
-  Too big output M
-  [-]
-  >>>++++++++[<++++++++++>-]<---.<<<
-  [-]
-]
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+If positive (>170) not a reasoning word
+[>+<[-]]
 >[<
-  In range - check specific values
-  Sum-320 = 0-30 means patterns matched
-  
-  Output C for reasoning (most common)
-  >>>++++++++[<++++++++>-]<+++.<<<
+  Not in range check search patterns
+  >>+<<
 >[-]]<
+
+If in range (0-170) could be reasoning
+[[-]
+  Now narrow down
+  Check if sum-390 is in 0-20 range (how/why patterns sum 398-410)
+  Restore and check
+  <[->+<]>
+  --------------------
+  [>+<[-]]>[<
+    Reasoning word with higher sum output C
+    >>>>[-]++++++++[<++++++++>-]<+++.[-]<<<<
+  >[-]]<
+  [[-]
+    Lower sum reasoning word output C
+    >>>>[-]++++++++[<++++++++>-]<+++.[-]<<<<
+  ]
+]
+
+=============== CHECK SEARCH PATTERNS ===============
+Check flag in cell 7 if we need to check search
+>>
+[[-]<<
+  Search words sum range: 477-545
+  Need to check original sum
+  Restore from cell 5 area
+  <<<<< go back to start
+  
+  For search patterns output P
+  >>>>>
+  >>[-]>++++++++++[<++++++++>-]<.[-]<
+>>]<<
+
+=============== DEFAULT OUTPUT M ===============
+Check if anything was output if not output M
+>>>>>>>>[-]+<<<<<<<<
+[>>>>>>>>-<<<<<<<<[-]]
+>>>>>>>>
+[[-]
+  ++++++++[<++++++++++>-]<---.[-]
+]
+
+=============== END ===============

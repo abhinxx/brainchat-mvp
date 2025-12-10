@@ -17,10 +17,14 @@ const ROUTER_CODE = extractBF(MODEL_ROUTER_BF);
 const PARSER_CODE = extractBF(RESPONSE_PARSER_BF);
 const SCORER_CODE = extractBF(CONFIDENCE_SCORER_BF);
 
+// Keywords for routing - BF will scan for these
+const REASONING_WORDS = ['should', 'why', 'how', 'analyze', 'explain', 'compare', 'evaluate', 'think', 'reason', 'advice', 'recommend', 'decide', 'better', 'worth', 'pros', 'cons'];
+const SEARCH_WORDS = ['news', 'latest', 'current', 'today', 'recent', 'update', 'trending', 'search'];
+
 // Model mapping
 const MODELS = {
   'P': 'perplexity/sonar-pro',
-  'C': 'openai/gpt-4o',
+  'C': 'openai/gpt-5.1',
   'M': 'mistralai/mistral-large-latest'
 };
 
@@ -40,19 +44,36 @@ module.exports = async function handler(req, res) {
   if (!apiKey) return res.status(400).json({ error: 'No API key' });
 
   try {
-    // Extract first word, first 3 chars for BF router
-    const firstWord = query.toLowerCase().split(/\s+/)[0] || '';
-    const chars3 = (firstWord + '   ').slice(0, 3); // pad to 3 chars
-    
-    // Run BF Router
-    let routerOutput = 'M';
-    try {
-      routerOutput = brainfuck.execute(ROUTER_CODE, chars3) || 'M';
-    } catch (e) {
-      routerOutput = 'M';
+    // Scan query for keywords - pass each word to BF for matching
+    const words = query.toLowerCase().split(/\s+/);
+    let matchedWord = null;
+    let modelKey = 'M';
+    let routerOutput = '';
+    let allScans = [];
+
+    // BF scans each word
+    for (const word of words) {
+      const wordChars = (word + '   ').slice(0, 5); // 5 chars for matching
+      try {
+        const output = brainfuck.execute(ROUTER_CODE, wordChars) || '';
+        allScans.push({ word, output: output.trim() });
+        
+        // Check if BF found a match
+        if (output.includes('C') && !matchedWord) {
+          matchedWord = word;
+          modelKey = 'C';
+          routerOutput = output;
+        } else if (output.includes('P') && !matchedWord) {
+          matchedWord = word;
+          modelKey = 'P';
+          routerOutput = output;
+        }
+      } catch (e) {
+        allScans.push({ word, output: 'error' });
+      }
     }
-    
-    const modelKey = routerOutput.replace(/[^PCM]/g, '').charAt(0) || 'M';
+
+    if (!routerOutput) routerOutput = 'M';
     const model = MODELS[modelKey] || MODELS['M'];
     const modelName = MODEL_NAMES[modelKey] || 'Mistral';
 
@@ -76,6 +97,12 @@ module.exports = async function handler(req, res) {
         ]
       })
     });
+
+    // FIX: Check response before parsing JSON
+    if (!llmRes.ok) {
+      const errorText = await llmRes.text();
+      return res.status(500).json({ error: `API error: ${llmRes.status} - ${errorText.slice(0, 100)}` });
+    }
 
     const llmData = await llmRes.json();
     if (llmData.error) return res.status(500).json({ error: llmData.error.message });
@@ -111,8 +138,14 @@ module.exports = async function handler(req, res) {
       emoji,
       text,
       confidence,
+      matchedWord,
       bf: {
-        router: { code: ROUTER_CODE, input: chars3, output: routerOutput },
+        router: { 
+          code: ROUTER_CODE, 
+          scans: allScans,
+          matchedWord,
+          output: routerOutput 
+        },
         parser: { code: PARSER_CODE, output: parserOutput },
         scorer: { code: SCORER_CODE, output: scorerOutput }
       }

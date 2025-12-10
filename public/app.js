@@ -35,10 +35,9 @@ chatForm.addEventListener('submit', async (e) => {
   queryInput.value = '';
   setLoading(true);
 
-  // Update panels
-  setPanel('router', 'processing...', '-', []);
-  setPanel('parser', 'processing...', '-', []);
-  setPanel('scorer', 'processing...', '-', []);
+  setPanel('router', 'scanning words...', '-', null);
+  setPanel('parser', 'waiting...', '-', null);
+  setPanel('scorer', 'waiting...', '-', null);
 
   try {
     const res = await fetch('/api/chat', {
@@ -50,14 +49,35 @@ chatForm.addEventListener('submit', async (e) => {
 
     if (data.error) {
       addMessage('error', data.error);
-      setPanel('router', 'error', '-', []);
-      setPanel('parser', 'error', '-', []);
-      setPanel('scorer', 'error', '-', []);
+      setPanel('router', 'error', '-', null);
+      setPanel('parser', 'error', '-', null);
+      setPanel('scorer', 'error', '-', null);
     } else {
-      // Update BF panels with results
-      setPanel('router', `→ ${data.model}`, data.bf.router.code, data.bf.router.tape, data.bf.router.pointer);
-      setPanel('parser', '✓ parsed', data.bf.parser.code, data.bf.parser.tape, data.bf.parser.pointer);
-      setPanel('scorer', `${data.confidence}%`, data.bf.scorer.code, data.bf.scorer.tape, data.bf.scorer.pointer);
+      // Show word scanning results
+      const scans = data.bf.router.scans || [];
+      const matchedWord = data.matchedWord;
+      
+      // Build scan visualization
+      let scanHtml = '<div class="text-xs space-y-1">';
+      scans.forEach(s => {
+        const isMatch = s.word === matchedWord;
+        const cls = isMatch ? 'text-accent font-bold bg-accent/20 px-1 rounded' : 'text-gray-500';
+        scanHtml += `<span class="${cls}">${s.word}</span> `;
+      });
+      scanHtml += '</div>';
+      
+      if (matchedWord) {
+        scanHtml += `<div class="mt-2 text-accent text-sm">✓ Matched: "${matchedWord}" → ${data.model}</div>`;
+      } else {
+        scanHtml += `<div class="mt-2 text-gray-400 text-sm">No keyword match → ${data.model} (default)</div>`;
+      }
+      
+      document.getElementById('routerOutput').innerHTML = `<span class="text-accent">→ ${data.model}</span>`;
+      document.getElementById('routerCode').textContent = data.bf.router.code.slice(0, 80) + '...';
+      document.getElementById('routerScans').innerHTML = scanHtml;
+
+      setPanel('parser', '✓ parsed', data.bf.parser.code.slice(0, 60) + '...', null);
+      setPanel('scorer', `${data.confidence}%`, data.bf.scorer.code.slice(0, 60) + '...', null);
 
       addMessage('assistant', data.text, data.emoji, data.model, data.confidence);
     }
@@ -74,11 +94,17 @@ function setLoading(loading) {
   document.querySelector('button[type="submit"]').disabled = loading;
 }
 
-function setPanel(name, status, code, tape, pointer = 0) {
-  const statusClass = status.includes('error') ? 'text-red-400' : 'text-accent';
-  document.getElementById(`${name}Output`).innerHTML = `<span class="${statusClass}">${status}</span>`;
-  document.getElementById(`${name}Code`).textContent = code;
-  renderTape(`${name}Tape`, tape, pointer);
+function setPanel(name, status, code, tape) {
+  const statusEl = document.getElementById(`${name}Output`);
+  const codeEl = document.getElementById(`${name}Code`);
+  
+  if (statusEl) {
+    const cls = status.includes('error') ? 'text-red-400' : 'text-accent';
+    statusEl.innerHTML = `<span class="${cls}">${status}</span>`;
+  }
+  if (codeEl && code) {
+    codeEl.textContent = code;
+  }
 }
 
 function addMessage(role, text, emoji = '', model = '', confidence = '') {
@@ -108,18 +134,4 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
-}
-
-function renderTape(elementId, tape, pointer) {
-  const container = document.getElementById(elementId);
-  container.innerHTML = '';
-  if (!tape || !tape.length) return;
-  
-  tape.slice(0, 12).forEach((val, i) => {
-    const cell = document.createElement('div');
-    const isActive = i === pointer;
-    cell.className = `w-6 h-5 flex items-center justify-center text-[9px] rounded ${isActive ? 'bg-accent text-bg font-bold' : 'bg-bg text-gray-500'}`;
-    cell.textContent = val;
-    container.appendChild(cell);
-  });
 }

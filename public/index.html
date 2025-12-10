@@ -25,159 +25,113 @@
 </head>
 <body class="bg-bg text-gray-200 font-mono">
   
-  <!-- HERO / CONTEXT -->
+  <!-- HERO -->
   <header class="border-b border-border">
-    <div class="max-w-6xl mx-auto px-6 py-8">
+    <div class="max-w-6xl mx-auto px-6 py-6">
       <div class="flex items-center justify-between">
         <div>
-          <h1 class="text-4xl font-bold text-accent">🧠 BrainChat</h1>
-          <p class="text-gray-400 mt-2">EWOR Technical Case Study: Chat Application in Brainfuck</p>
+          <h1 class="text-3xl font-bold text-accent">🧠 BrainChat</h1>
+          <p class="text-gray-500 text-sm mt-1">EWOR Case Study: Chat in Brainfuck</p>
         </div>
-        <a href="https://github.com/abhinxx/brainchat-mvp" target="_blank" class="text-gray-400 hover:text-accent text-sm">View Source →</a>
+        <a href="https://github.com/abhinxx/brainchat-mvp" target="_blank" class="text-gray-400 hover:text-accent text-sm">GitHub →</a>
       </div>
       
-      <!-- THE PITCH -->
-      <div class="mt-6 p-4 bg-surface border border-border rounded-lg">
-        <p class="text-sm text-gray-300">
-          <span class="text-accent font-bold">The Challenge:</span> Build a chat server/client in Brainfuck.<br>
-          <span class="text-accent font-bold">The Solution:</span> Brainfuck handles <u>real business logic</u> — model routing, response parsing, and confidence scoring — not just decoration.
-        </p>
+      <div class="mt-4 p-3 bg-surface border border-border rounded text-sm">
+        <span class="text-accent">Challenge:</span> Build chat in Brainfuck. 
+        <span class="text-accent">Solution:</span> BF handles model routing, parsing, and confidence scoring.
       </div>
     </div>
   </header>
 
-  <!-- HOW IT WORKS -->
+  <!-- FLOW -->
   <section class="border-b border-border bg-surface">
-    <div class="max-w-6xl mx-auto px-6 py-6">
-      <h2 class="text-lg font-bold text-accent mb-4">⚡ How It Works (The Flow)</h2>
-      <div class="flex items-center justify-between text-xs text-center gap-2">
-        <div class="flex-1 p-3 bg-bg border border-border rounded">
-          <div class="text-2xl mb-1">💬</div>
-          <div class="text-gray-400">Your Query</div>
-        </div>
+    <div class="max-w-6xl mx-auto px-6 py-4">
+      <div class="flex items-center justify-between text-[10px] text-center gap-1">
+        <div class="p-2 bg-bg border border-border rounded flex-1">💬 Query</div>
         <div class="text-accent">→</div>
-        <div class="flex-1 p-3 bg-bg border border-accent rounded">
-          <div class="text-2xl mb-1">🔀</div>
-          <div class="text-accent font-bold">BF Router</div>
-          <div class="text-gray-500 text-[10px]">Selects LLM</div>
-        </div>
+        <div class="p-2 bg-bg border border-accent rounded flex-1 text-accent">🔀 BF Router</div>
         <div class="text-accent">→</div>
-        <div class="flex-1 p-3 bg-bg border border-border rounded">
-          <div class="text-2xl mb-1">🤖</div>
-          <div class="text-gray-400">OpenRouter API</div>
-          <div class="text-gray-500 text-[10px]">GPT/Perplexity/Mistral</div>
-        </div>
+        <div class="p-2 bg-bg border border-border rounded flex-1">🤖 LLM API</div>
         <div class="text-accent">→</div>
-        <div class="flex-1 p-3 bg-bg border border-accent rounded">
-          <div class="text-2xl mb-1">📝</div>
-          <div class="text-accent font-bold">BF Parser</div>
-          <div class="text-gray-500 text-[10px]">Extracts emoji+text</div>
-        </div>
+        <div class="p-2 bg-bg border border-accent rounded flex-1 text-accent">📝 BF Parser</div>
         <div class="text-accent">→</div>
-        <div class="flex-1 p-3 bg-bg border border-accent rounded">
-          <div class="text-2xl mb-1">📊</div>
-          <div class="text-accent font-bold">BF Scorer</div>
-          <div class="text-gray-500 text-[10px]">Confidence %</div>
-        </div>
+        <div class="p-2 bg-bg border border-accent rounded flex-1 text-accent">📊 BF Scorer</div>
         <div class="text-accent">→</div>
-        <div class="flex-1 p-3 bg-bg border border-border rounded">
-          <div class="text-2xl mb-1">✅</div>
-          <div class="text-gray-400">Response</div>
-        </div>
+        <div class="p-2 bg-bg border border-border rounded flex-1">✅ Response</div>
       </div>
     </div>
   </section>
 
-  <!-- MAIN INTERFACE -->
+  <!-- MAIN -->
   <main class="max-w-6xl mx-auto px-6 py-6">
     <div class="grid grid-cols-2 gap-6">
       
       <!-- LEFT: Chat -->
       <div>
-        <div class="flex items-center gap-2 mb-4">
+        <div class="flex items-center gap-2 mb-3">
           <input type="password" id="apiKeyInput" placeholder="OpenRouter API Key" 
                  class="flex-1 px-3 py-2 bg-surface border border-border rounded text-sm focus:border-accent focus:outline-none">
-          <button id="saveKeyBtn" class="px-4 py-2 bg-accent text-bg font-bold rounded text-sm">Save</button>
+          <button id="saveKeyBtn" class="px-3 py-2 bg-accent text-bg font-bold rounded text-sm">Save</button>
           <span id="keyStatus" class="text-xs text-accent"></span>
         </div>
 
-        <div id="chatBox" class="h-64 overflow-y-auto bg-surface border border-border rounded-lg p-4 space-y-3 mb-4"></div>
+        <div id="chatBox" class="h-72 overflow-y-auto bg-surface border border-border rounded-lg p-3 space-y-2 mb-3"></div>
 
         <form id="chatForm" class="flex gap-2">
-          <input type="text" id="queryInput" placeholder="Try: 'What's the latest news in France?'" autocomplete="off" required
-                 class="flex-1 px-4 py-3 bg-surface border border-border rounded-lg focus:border-accent focus:outline-none">
-          <button type="submit" class="px-6 py-3 bg-accent text-bg font-bold rounded-lg hover:bg-green-400 disabled:opacity-50">Send</button>
+          <input type="text" id="queryInput" placeholder="Try: 'should I learn Python or JavaScript?'" autocomplete="off" required
+                 class="flex-1 px-3 py-2 bg-surface border border-border rounded focus:border-accent focus:outline-none text-sm">
+          <button type="submit" class="px-4 py-2 bg-accent text-bg font-bold rounded text-sm">Send</button>
         </form>
         
-        <p class="text-xs text-gray-500 mt-2">
-          💡 Try queries with "news", "latest", "search" (→ Perplexity) or "analyze", "explain" (→ ChatGPT)
+        <p class="text-[10px] text-gray-500 mt-2">
+          Keywords: "should/why/how/analyze" → ChatGPT | "news/latest/today" → Perplexity | else → Mistral
         </p>
       </div>
 
       <!-- RIGHT: BF Execution -->
-      <div class="space-y-4">
-        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wide">Live Brainfuck Execution</h3>
+      <div class="space-y-3">
+        <h3 class="text-xs font-bold text-gray-500 uppercase">Live Brainfuck Execution</h3>
         
         <!-- Router -->
-        <div class="bg-surface border border-border rounded-lg p-4">
+        <div class="bg-surface border border-border rounded p-3">
           <div class="flex items-center justify-between mb-2">
             <span class="text-accent font-bold text-sm">🔀 Model Router</span>
             <span id="routerOutput" class="text-xs text-gray-500">waiting...</span>
           </div>
-          <p class="text-[10px] text-gray-500 mb-2">Reads query keywords → outputs model selection (P=Perplexity, C=ChatGPT, M=Mistral)</p>
-          <code id="routerCode" class="block text-[10px] text-pink-400 bg-bg p-2 rounded overflow-x-auto whitespace-nowrap mb-2">-</code>
-          <div class="flex items-center gap-1 text-[10px]">
-            <span class="text-gray-500">Memory:</span>
-            <div id="routerTape" class="flex gap-0.5"></div>
-          </div>
+          <p class="text-[10px] text-gray-500 mb-2">Scans each word in query → matches keywords → selects model</p>
+          <code id="routerCode" class="block text-[9px] text-pink-400 bg-bg p-2 rounded overflow-x-auto whitespace-nowrap mb-2">-</code>
+          <div id="routerScans" class="text-xs text-gray-400">Words will be scanned here...</div>
         </div>
 
         <!-- Parser -->
-        <div class="bg-surface border border-border rounded-lg p-4">
+        <div class="bg-surface border border-border rounded p-3">
           <div class="flex items-center justify-between mb-2">
             <span class="text-accent font-bold text-sm">📝 Response Parser</span>
             <span id="parserOutput" class="text-xs text-gray-500">waiting...</span>
           </div>
-          <p class="text-[10px] text-gray-500 mb-2">Processes LLM response → extracts EMOJI: and TEXT: sections</p>
-          <code id="parserCode" class="block text-[10px] text-pink-400 bg-bg p-2 rounded overflow-x-auto whitespace-nowrap mb-2">-</code>
-          <div class="flex items-center gap-1 text-[10px]">
-            <span class="text-gray-500">Memory:</span>
-            <div id="parserTape" class="flex gap-0.5"></div>
-          </div>
+          <p class="text-[10px] text-gray-500 mb-2">Scans for TEXT: marker → extracts content</p>
+          <code id="parserCode" class="block text-[9px] text-pink-400 bg-bg p-2 rounded overflow-x-auto whitespace-nowrap">-</code>
         </div>
 
         <!-- Scorer -->
-        <div class="bg-surface border border-border rounded-lg p-4">
+        <div class="bg-surface border border-border rounded p-3">
           <div class="flex items-center justify-between mb-2">
             <span class="text-accent font-bold text-sm">📊 Confidence Scorer</span>
             <span id="scorerOutput" class="text-xs text-gray-500">waiting...</span>
           </div>
-          <p class="text-[10px] text-gray-500 mb-2">Analyzes text for hedge words ("might", "possibly") → outputs confidence %</p>
-          <code id="scorerCode" class="block text-[10px] text-pink-400 bg-bg p-2 rounded overflow-x-auto whitespace-nowrap mb-2">-</code>
-          <div class="flex items-center gap-1 text-[10px]">
-            <span class="text-gray-500">Memory:</span>
-            <div id="scorerTape" class="flex gap-0.5"></div>
-          </div>
+          <p class="text-[10px] text-gray-500 mb-2">Scans for hedge words (might/could/possibly) → calculates confidence</p>
+          <code id="scorerCode" class="block text-[9px] text-pink-400 bg-bg p-2 rounded overflow-x-auto whitespace-nowrap">-</code>
         </div>
       </div>
     </div>
   </main>
 
-  <!-- FOOTER: Technical Details -->
-  <footer class="border-t border-border mt-8">
-    <div class="max-w-6xl mx-auto px-6 py-6">
-      <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wide mb-3">Why This Matters</h3>
-      <div class="grid grid-cols-3 gap-4 text-xs text-gray-400">
-        <div>
-          <span class="text-accent">✓</span> Brainfuck does <u>real work</u> — routing, parsing, scoring
-        </div>
-        <div>
-          <span class="text-accent">✓</span> Multi-model orchestration (Perplexity/GPT/Mistral)
-        </div>
-        <div>
-          <span class="text-accent">✓</span> Confidence scoring addresses AI hallucination awareness
-        </div>
-      </div>
+  <!-- FOOTER -->
+  <footer class="border-t border-border mt-4">
+    <div class="max-w-6xl mx-auto px-6 py-4 text-[10px] text-gray-500">
+      <span class="text-accent">✓</span> BF does real work (routing/parsing/scoring) | 
+      <span class="text-accent">✓</span> Multi-model (Perplexity/GPT/Mistral) | 
+      <span class="text-accent">✓</span> Confidence scoring for hallucination awareness
     </div>
   </footer>
 
