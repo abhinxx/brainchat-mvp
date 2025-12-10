@@ -1,38 +1,23 @@
-let brainfuck, fs, path;
+const { runBF } = require('../lib/bf-interpreter');
+const fs = require('fs');
+const path = require('path');
+
+// Load BF files
+const BF_DIR = path.join(__dirname, '..', 'bf');
+
+function extractBF(source) {
+  return source.replace(/[^><+\-.,\[\]]/g, '');
+}
+
 let ROUTER_CODE = '', PARSER_CODE = '', SCORER_CODE = '';
 let initError = null;
 
-// Wrap all initialization in try-catch
 try {
-  brainfuck = require('brainfuck-interpreter');
-  fs = require('fs');
-  path = require('path');
-
-  const BF_DIR = path.join(__dirname, '..', 'bf');
-  
-  function extractBF(source) {
-    return source.replace(/[^><+\-.,\[\]]/g, '');
-  }
-
-  try {
-    ROUTER_CODE = extractBF(fs.readFileSync(path.join(BF_DIR, 'model_router.bf'), 'utf8'));
-  } catch (e) {
-    initError = 'Failed to load model_router.bf: ' + e.message;
-  }
-  
-  try {
-    PARSER_CODE = extractBF(fs.readFileSync(path.join(BF_DIR, 'response_parser.bf'), 'utf8'));
-  } catch (e) {
-    initError = 'Failed to load response_parser.bf: ' + e.message;
-  }
-  
-  try {
-    SCORER_CODE = extractBF(fs.readFileSync(path.join(BF_DIR, 'confidence_scorer.bf'), 'utf8'));
-  } catch (e) {
-    initError = 'Failed to load confidence_scorer.bf: ' + e.message;
-  }
+  ROUTER_CODE = extractBF(fs.readFileSync(path.join(BF_DIR, 'model_router.bf'), 'utf8'));
+  PARSER_CODE = extractBF(fs.readFileSync(path.join(BF_DIR, 'response_parser.bf'), 'utf8'));
+  SCORER_CODE = extractBF(fs.readFileSync(path.join(BF_DIR, 'confidence_scorer.bf'), 'utf8'));
 } catch (e) {
-  initError = 'Module init failed: ' + e.message;
+  initError = 'Failed to load BF files: ' + e.message;
 }
 
 const MODELS = {
@@ -48,7 +33,6 @@ const MODEL_NAMES = {
 };
 
 module.exports = async function handler(req, res) {
-  // Check init error first
   if (initError) {
     return res.status(500).json({ error: initError });
   }
@@ -58,11 +42,11 @@ module.exports = async function handler(req, res) {
   }
 
   const { query, apiKey } = req.body || {};
-  if (!query) return res.status(400).json({ error: 'No query provided' });
-  if (!apiKey) return res.status(400).json({ error: 'No API key provided' });
+  if (!query) return res.status(400).json({ error: 'No query' });
+  if (!apiKey) return res.status(400).json({ error: 'No API key' });
 
   try {
-    // BF Router - scan words
+    // BF Router - scan each word
     const words = query.toLowerCase().split(/\s+/);
     let matchedWord = null;
     let modelKey = 'M';
@@ -71,12 +55,8 @@ module.exports = async function handler(req, res) {
 
     for (const word of words) {
       const wordChars = (word + '     ').slice(0, 5);
-      let output = 'M';
-      try {
-        output = brainfuck.execute(ROUTER_CODE, wordChars) || 'M';
-      } catch (e) {
-        output = 'BF_ERROR';
-      }
+      const result = runBF(ROUTER_CODE, wordChars);
+      const output = result.output || 'M';
       allScans.push({ word, output: output.trim() });
       
       if (output.includes('C') && !matchedWord) {
@@ -95,48 +75,36 @@ module.exports = async function handler(req, res) {
     const modelName = MODEL_NAMES[modelKey] || 'Mistral';
 
     // Call OpenRouter API
-    let llmRes;
-    try {
-      llmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://brainchat.vercel.app',
-          'X-Title': 'BrainChat'
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: 'system',
-              content: 'Respond in TWO parts:\n1. EMOJI: Answer in emoji only\n2. TEXT: Same answer in plain text\n\nFormat:\nEMOJI: [emojis]\nTEXT: [text]'
-            },
-            { role: 'user', content: query }
-          ]
-        })
-      });
-    } catch (fetchErr) {
-      return res.status(500).json({ error: 'Fetch failed: ' + fetchErr.message });
-    }
+    const llmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://brainchat.vercel.app',
+        'X-Title': 'BrainChat'
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: 'Respond in TWO parts:\n1. EMOJI: Answer in emoji only\n2. TEXT: Same answer in plain text\n\nFormat:\nEMOJI: [emojis]\nTEXT: [text]'
+          },
+          { role: 'user', content: query }
+        ]
+      })
+    });
 
-    // Get response as text first
-    let responseText;
-    try {
-      responseText = await llmRes.text();
-    } catch (e) {
-      return res.status(500).json({ error: 'Failed to read response: ' + e.message });
-    }
-
-    // Parse JSON
+    const responseText = await llmRes.text();
+    
     let llmData;
     try {
       llmData = JSON.parse(responseText);
     } catch (e) {
       return res.status(500).json({ 
-        error: 'Invalid JSON from API',
+        error: 'API error',
         status: llmRes.status,
-        response: responseText.slice(0, 300)
+        response: responseText.slice(0, 200)
       });
     }
 
@@ -147,10 +115,7 @@ module.exports = async function handler(req, res) {
     const raw = llmData.choices?.[0]?.message?.content || '';
 
     // BF Parser
-    let parserOutput = '';
-    try {
-      parserOutput = brainfuck.execute(PARSER_CODE, raw.slice(0, 50)) || '';
-    } catch (e) {}
+    const parserResult = runBF(PARSER_CODE, raw.slice(0, 50));
 
     // Extract emoji/text
     let emoji = '', text = raw;
@@ -160,12 +125,9 @@ module.exports = async function handler(req, res) {
     if (tx) text = tx[1].trim();
 
     // BF Scorer
-    let scorerOutput = '';
-    try {
-      scorerOutput = brainfuck.execute(SCORER_CODE, text.slice(0, 50)) || '';
-    } catch (e) {}
+    const scorerResult = runBF(SCORER_CODE, text.slice(0, 50));
 
-    // Confidence calculation
+    // Confidence
     const hedges = ['might', 'could', 'possibly', 'maybe', 'perhaps', 'generally', 'usually', 'typically', 'likely', 'probably'];
     const hedgeCount = hedges.filter(w => text.toLowerCase().includes(w)).length;
     const confidence = Math.max(0, 100 - hedgeCount * 15);
@@ -177,13 +139,18 @@ module.exports = async function handler(req, res) {
       confidence,
       matchedWord,
       bf: {
-        router: { code: ROUTER_CODE.slice(0, 100), scans: allScans, output: routerOutput },
-        parser: { code: PARSER_CODE.slice(0, 100), output: parserOutput },
-        scorer: { code: SCORER_CODE.slice(0, 100), output: scorerOutput }
+        router: { 
+          code: ROUTER_CODE.slice(0, 100), 
+          scans: allScans, 
+          output: routerOutput,
+          tape: allScans[0]?.tape
+        },
+        parser: { code: PARSER_CODE.slice(0, 100), output: parserResult.output },
+        scorer: { code: SCORER_CODE.slice(0, 100), output: scorerResult.output }
       }
     });
 
   } catch (err) {
-    return res.status(500).json({ error: 'Handler error: ' + err.message, stack: err.stack?.slice(0, 500) });
+    return res.status(500).json({ error: err.message });
   }
 };

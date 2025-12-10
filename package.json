@@ -1,8 +1,5 @@
 {
   "name": "brainchat",
   "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "brainfuck-interpreter": "^1.0.1"
-  }
+  "private": true
 }
