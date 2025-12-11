@@ -118,10 +118,12 @@ function updateTokenPanel(tokenCounter, stats) {
 }
 
 function updateCostPanel(costCalc, stats) {
-  const cost = stats?.estimatedCost || 0;
-  const tier = cost > 0.01 ? '$$$' : cost > 0.001 ? '$$' : '$';
+  const costStr = stats?.cost || '$0.000000';
+  const tier = stats?.realCost > 0.01 ? '$$$' : stats?.realCost > 0.001 ? '$$' : '$';
   document.getElementById('costStatus').textContent = tier;
-  document.getElementById('costResult').textContent = `≈ $${cost.toFixed(6)}`;
+  document.getElementById('costResult').textContent = stats?.realCost 
+    ? `${costStr} (from API)` 
+    : `${costStr} (estimated)`;
   document.getElementById('costCode').textContent = ',[->+>+<<]>>[-<<+>>]...';
 }
 
@@ -137,9 +139,14 @@ function updateScorerPanel(scorer, confidence) {
 }
 
 function updateStats(stats, confidence) {
+  // Real TTFT from streaming
+  document.getElementById('statTTFT').textContent = `${stats?.timeToFirstToken || 0}ms`;
   document.getElementById('statTime').textContent = `${stats?.totalTime || 0}ms`;
   document.getElementById('statTokens').textContent = stats?.totalTokens || 0;
-  document.getElementById('statCost').textContent = `$${(stats?.estimatedCost || 0).toFixed(6)}`;
+  // Tokens per second
+  document.getElementById('statSpeed').textContent = `${stats?.tokensPerSecond || 0} tok/s`;
+  // Real cost from OpenRouter API
+  document.getElementById('statCost').textContent = stats?.cost || '$0';
   document.getElementById('statConfidence').textContent = `${confidence}%`;
 }
 

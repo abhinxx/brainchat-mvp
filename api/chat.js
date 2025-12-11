@@ -20,17 +20,15 @@ const TOKEN_COUNTER_CODE = loadBF('token_counter.bf');
 const COST_CALC_CODE = loadBF('cost_calculator.bf');
 
 const MODELS = {
-  'auto': null, // BF decides
+  'auto': null,
   'perplexity': { id: 'perplexity/sonar-pro', name: 'Perplexity' },
   'chatgpt': { id: 'openai/gpt-4o-mini', name: 'ChatGPT' },
   'mistral': { id: 'mistralai/mistral-large-latest', name: 'Mistral' }
 };
 
-// Critical thinking system prompt
 const SYSTEM_PROMPT = `You are a critical thinking assistant. Be precise and analytical.
 When uncertain, explicitly state your confidence level.
 Use phrases like "I believe", "It's likely", "I'm uncertain" when appropriate.
-Provide balanced perspectives when topics are debatable.
 Be concise but thorough.`;
 
 module.exports = async function handler(req, res) {
@@ -47,14 +45,13 @@ module.exports = async function handler(req, res) {
   try {
     let modelId, modelName, routerResult = null, matchedKeyword = null;
 
+    // === BF MODEL ROUTER ===
     if (selectedModel === 'auto') {
-      // BF Router decides - scan each word
       const words = query.toLowerCase().split(/\s+/);
       let routerOutput = '';
       let allScans = [];
 
       for (const word of words) {
-        // Pass first 6 chars of each word to BF
         const input = (word + '      ').slice(0, 6);
         const result = runBF(ROUTER_CODE, input);
         allScans.push({ word, output: result.output, steps: result.steps });
@@ -68,7 +65,6 @@ module.exports = async function handler(req, res) {
         }
       }
 
-      // Default to Mistral if no match
       if (!routerOutput) routerOutput = 'M';
       
       const modelMap = { 'P': 'perplexity', 'C': 'chatgpt', 'M': 'mistral' };
@@ -78,13 +74,12 @@ module.exports = async function handler(req, res) {
       
       routerResult = { scans: allScans, output: routerOutput, matchedKeyword };
     } else {
-      // Manual selection
       const selected = MODELS[selectedModel] || MODELS['mistral'];
       modelId = selected.id;
       modelName = selected.name;
     }
 
-    // Call OpenRouter API
+    // === CALL OPENROUTER WITH STREAMING ===
     const llmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -95,6 +90,7 @@ module.exports = async function handler(req, res) {
       },
       body: JSON.stringify({
         model: modelId,
+        stream: true,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: query }
@@ -102,53 +98,93 @@ module.exports = async function handler(req, res) {
       })
     });
 
-    const timeToFirstToken = Date.now() - startTime;
-    const responseText = await llmRes.text();
-    
-    let llmData;
-    try {
-      llmData = JSON.parse(responseText);
-    } catch (e) {
-      return res.status(500).json({ 
-        error: 'API error',
-        details: responseText.slice(0, 200)
-      });
+    if (!llmRes.ok) {
+      const errorText = await llmRes.text();
+      return res.status(500).json({ error: `API error: ${errorText.slice(0, 200)}` });
     }
 
-    if (llmData.error) {
-      return res.status(500).json({ error: llmData.error.message });
+    // === STREAMING: Measure REAL Time To First Token ===
+    const reader = llmRes.body.getReader();
+    const decoder = new TextDecoder();
+    let fullContent = '';
+    let timeToFirstToken = null;
+    let usage = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n');
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(data);
+            
+            // Capture TTFT when first content arrives
+            const delta = parsed.choices?.[0]?.delta?.content;
+            if (delta && timeToFirstToken === null) {
+              timeToFirstToken = Date.now() - startTime;
+            }
+            if (delta) {
+              fullContent += delta;
+            }
+
+            // Capture usage from final chunk
+            if (parsed.usage) {
+              usage = parsed.usage;
+            }
+          } catch (e) {
+            // Skip invalid JSON chunks
+          }
+        }
+      }
     }
 
-    const response = llmData.choices?.[0]?.message?.content || '';
-    const usage = llmData.usage || {};
     const totalTime = Date.now() - startTime;
 
-    // BF Token Counter - count words in response
-    const tokenResult = runBF(TOKEN_COUNTER_CODE, response.slice(0, 200));
+    // === BF TOKEN COUNTER ===
+    const tokenResult = runBF(TOKEN_COUNTER_CODE, fullContent.slice(0, 200));
     
-    // BF Cost Calculator - estimate based on token count
-    const costInput = String(usage.total_tokens || 0).slice(0, 10);
+    // === BF COST CALCULATOR ===
+    const costInput = String(usage?.total_tokens || 0).slice(0, 10);
     const costResult = runBF(COST_CALC_CODE, costInput);
 
-    // BF Confidence Scorer
-    const scorerResult = runBF(SCORER_CODE, response.slice(0, 100));
+    // === BF CONFIDENCE SCORER ===
+    const scorerResult = runBF(SCORER_CODE, fullContent.slice(0, 100));
     
-    // Calculate confidence from hedge words + BF output
+    // Calculate confidence from hedge words
     const hedgeWords = ['believe', 'likely', 'uncertain', 'perhaps', 'maybe', 'possibly', 'might', 'could', 'probably', 'seems'];
-    const hedgeCount = hedgeWords.filter(w => response.toLowerCase().includes(w)).length;
+    const hedgeCount = hedgeWords.filter(w => fullContent.toLowerCase().includes(w)).length;
     const confidence = Math.max(10, 100 - hedgeCount * 12);
 
+    // === CALCULATE REAL METRICS ===
+    const completionTokens = usage?.completion_tokens || 0;
+    const tokensPerSecond = totalTime > 0 ? (completionTokens / (totalTime / 1000)).toFixed(1) : 0;
+    
+    // Use REAL cost from OpenRouter if available, otherwise estimate
+    const realCost = usage?.total_cost || usage?.cost;
+    const estimatedCost = realCost 
+      ? `$${realCost.toFixed(6)}` 
+      : `~$${((usage?.total_tokens || 0) * 0.000002).toFixed(6)}`;
+
     return res.status(200).json({
-      response,
+      response: fullContent,
       model: modelName,
       modelId,
       stats: {
-        timeToFirstToken,
+        timeToFirstToken: timeToFirstToken || totalTime,
         totalTime,
-        promptTokens: usage.prompt_tokens || 0,
-        completionTokens: usage.completion_tokens || 0,
-        totalTokens: usage.total_tokens || 0,
-        estimatedCost: (usage.total_tokens || 0) * 0.00001 // rough estimate
+        promptTokens: usage?.prompt_tokens || 0,
+        completionTokens: completionTokens,
+        totalTokens: usage?.total_tokens || 0,
+        tokensPerSecond: parseFloat(tokensPerSecond),
+        cost: estimatedCost,
+        realCost: realCost || null
       },
       confidence,
       bf: {
