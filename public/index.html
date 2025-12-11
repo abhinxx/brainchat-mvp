@@ -3,137 +3,142 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BrainChat - EWOR Case Study</title>
+  <title>BrainChat - 1:1 Chat in Brainfuck</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
           colors: {
-            bg: '#0a0a0f',
-            surface: '#12121a',
-            border: '#2a2a3a',
+            bg: '#080810',
+            surface: '#0f0f1a',
+            card: '#151525',
+            border: '#252540',
             accent: '#00ff9d',
-          },
-          fontFamily: {
-            mono: ['SF Mono', 'Fira Code', 'monospace'],
+            accent2: '#00d4ff',
+            dim: '#4a4a6a'
           }
         }
       }
     }
   </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');
+    body { font-family: 'JetBrains Mono', monospace; }
+    .bf-tape { display: flex; gap: 2px; overflow-x: auto; }
+    .bf-cell { min-width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 9px; border-radius: 2px; }
+    .glow { box-shadow: 0 0 20px rgba(0, 255, 157, 0.2); }
+  </style>
 </head>
-<body class="bg-bg text-gray-200 font-mono">
+<body class="bg-bg text-gray-300 min-h-screen">
   
-  <!-- HERO -->
-  <header class="border-b border-border">
-    <div class="max-w-6xl mx-auto px-6 py-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-3xl font-bold text-accent">🧠 BrainChat</h1>
-          <p class="text-gray-500 text-sm mt-1">EWOR Case Study: Chat in Brainfuck</p>
-        </div>
-        <a href="https://github.com/abhinxx/brainchat-mvp" target="_blank" class="text-gray-400 hover:text-accent text-sm">GitHub →</a>
-      </div>
-      
-      <div class="mt-4 p-3 bg-surface border border-border rounded text-sm">
-        <span class="text-accent">Challenge:</span> Build chat in Brainfuck. 
-        <span class="text-accent">Solution:</span> BF handles model routing, parsing, and confidence scoring.
-      </div>
-    </div>
-  </header>
+  <div class="max-w-5xl mx-auto p-4">
+    <!-- Header -->
+    <header class="text-center py-6 border-b border-border mb-6">
+      <h1 class="text-3xl font-bold text-accent">🧠 BrainChat</h1>
+      <p class="text-dim text-sm mt-1">1:1 Server Chat Application in Brainfuck</p>
+      <p class="text-xs text-dim mt-2">EWOR Technical Case Study</p>
+    </header>
 
-  <!-- FLOW -->
-  <section class="border-b border-border bg-surface">
-    <div class="max-w-6xl mx-auto px-6 py-4">
-      <div class="flex items-center justify-between text-[10px] text-center gap-1">
-        <div class="p-2 bg-bg border border-border rounded flex-1">💬 Query</div>
-        <div class="text-accent">→</div>
-        <div class="p-2 bg-bg border border-accent rounded flex-1 text-accent">🔀 BF Router</div>
-        <div class="text-accent">→</div>
-        <div class="p-2 bg-bg border border-border rounded flex-1">🤖 LLM API</div>
-        <div class="text-accent">→</div>
-        <div class="p-2 bg-bg border border-accent rounded flex-1 text-accent">📝 BF Parser</div>
-        <div class="text-accent">→</div>
-        <div class="p-2 bg-bg border border-accent rounded flex-1 text-accent">📊 BF Scorer</div>
-        <div class="text-accent">→</div>
-        <div class="p-2 bg-bg border border-border rounded flex-1">✅ Response</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- MAIN -->
-  <main class="max-w-6xl mx-auto px-6 py-6">
-    <div class="grid grid-cols-2 gap-6">
+    <!-- Main Grid -->
+    <div class="grid grid-cols-3 gap-4">
       
-      <!-- LEFT: Chat -->
-      <div>
-        <div class="flex items-center gap-2 mb-3">
-          <input type="password" id="apiKeyInput" placeholder="OpenRouter API Key" 
-                 class="flex-1 px-3 py-2 bg-surface border border-border rounded text-sm focus:border-accent focus:outline-none">
-          <button id="saveKeyBtn" class="px-3 py-2 bg-accent text-bg font-bold rounded text-sm">Save</button>
-          <span id="keyStatus" class="text-xs text-accent"></span>
+      <!-- Left: Chat Panel -->
+      <div class="col-span-2 space-y-4">
+        
+        <!-- API Key + Model Selection -->
+        <div class="bg-surface border border-border rounded-lg p-3">
+          <div class="flex gap-2 items-center">
+            <input type="password" id="apiKeyInput" placeholder="OpenRouter API Key"
+                   class="flex-1 px-3 py-2 bg-card border border-border rounded text-sm focus:border-accent focus:outline-none">
+            <select id="modelSelect" class="px-3 py-2 bg-card border border-border rounded text-sm focus:border-accent focus:outline-none">
+              <option value="auto">🤖 Auto (Brainfuck)</option>
+              <option value="perplexity">🔍 Perplexity</option>
+              <option value="chatgpt">💬 ChatGPT</option>
+              <option value="mistral">⚡ Mistral</option>
+            </select>
+            <button id="saveKeyBtn" class="px-4 py-2 bg-accent text-bg font-bold rounded text-sm">Save</button>
+          </div>
+          <div class="flex justify-between items-center mt-2">
+            <span id="keyStatus" class="text-xs text-accent"></span>
+            <span class="text-xs text-dim">Auto mode uses Brainfuck to select the best model</span>
+          </div>
         </div>
 
-        <div id="chatBox" class="h-72 overflow-y-auto bg-surface border border-border rounded-lg p-3 space-y-2 mb-3"></div>
+        <!-- Chat Messages -->
+        <div id="chatBox" class="bg-surface border border-border rounded-lg h-80 overflow-y-auto p-4 space-y-3"></div>
 
+        <!-- Input -->
         <form id="chatForm" class="flex gap-2">
-          <input type="text" id="queryInput" placeholder="Try: 'should I learn Python or JavaScript?'" autocomplete="off" required
-                 class="flex-1 px-3 py-2 bg-surface border border-border rounded focus:border-accent focus:outline-none text-sm">
-          <button type="submit" class="px-4 py-2 bg-accent text-bg font-bold rounded text-sm">Send</button>
+          <input type="text" id="queryInput" placeholder="Ask anything..." autocomplete="off" required
+                 class="flex-1 px-4 py-3 bg-surface border border-border rounded-lg focus:border-accent focus:outline-none">
+          <button type="submit" class="px-6 py-3 bg-accent text-bg font-bold rounded-lg hover:bg-green-400 transition">Send</button>
         </form>
-        
-        <p class="text-[10px] text-gray-500 mt-2">
-          Keywords: "should/why/how/analyze" → ChatGPT | "news/latest/today" → Perplexity | else → Mistral
-        </p>
       </div>
 
-      <!-- RIGHT: BF Execution -->
+      <!-- Right: Brainfuck Execution Panel -->
       <div class="space-y-3">
-        <h3 class="text-xs font-bold text-gray-500 uppercase">Live Brainfuck Execution</h3>
-        
-        <!-- Router -->
-        <div class="bg-surface border border-border rounded p-3">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-accent font-bold text-sm">🔀 Model Router</span>
-            <span id="routerOutput" class="text-xs text-gray-500">waiting...</span>
+        <h2 class="text-sm font-bold text-accent uppercase tracking-wider">Live BF Execution</h2>
+
+        <!-- Model Router -->
+        <div id="routerPanel" class="bg-card border border-border rounded-lg p-3">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-accent font-bold text-xs">🔀 Model Router</span>
+            <span id="routerStatus" class="text-xs text-dim">idle</span>
           </div>
-          <p class="text-[10px] text-gray-500 mb-2">Scans each word in query → matches keywords → selects model</p>
-          <code id="routerCode" class="block text-[9px] text-pink-400 bg-bg p-2 rounded overflow-x-auto whitespace-nowrap mb-2">-</code>
-          <div id="routerScans" class="text-xs text-gray-400">Words will be scanned here...</div>
+          <div id="routerCode" class="text-[8px] text-pink-400 bg-bg p-2 rounded overflow-x-auto whitespace-nowrap mb-2 h-8">-</div>
+          <div id="routerResult" class="text-xs text-dim">Waiting for query...</div>
         </div>
 
-        <!-- Parser -->
-        <div class="bg-surface border border-border rounded p-3">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-accent font-bold text-sm">📝 Response Parser</span>
-            <span id="parserOutput" class="text-xs text-gray-500">waiting...</span>
+        <!-- Token Counter -->
+        <div id="tokenPanel" class="bg-card border border-border rounded-lg p-3">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-accent2 font-bold text-xs">📊 Token Counter</span>
+            <span id="tokenStatus" class="text-xs text-dim">idle</span>
           </div>
-          <p class="text-[10px] text-gray-500 mb-2">Scans for TEXT: marker → extracts content</p>
-          <code id="parserCode" class="block text-[9px] text-pink-400 bg-bg p-2 rounded overflow-x-auto whitespace-nowrap">-</code>
+          <div id="tokenCode" class="text-[8px] text-pink-400 bg-bg p-2 rounded overflow-x-auto whitespace-nowrap mb-2 h-8">-</div>
+          <div id="tokenResult" class="text-xs text-dim">-</div>
         </div>
 
-        <!-- Scorer -->
-        <div class="bg-surface border border-border rounded p-3">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-accent font-bold text-sm">📊 Confidence Scorer</span>
-            <span id="scorerOutput" class="text-xs text-gray-500">waiting...</span>
+        <!-- Cost Calculator -->
+        <div id="costPanel" class="bg-card border border-border rounded-lg p-3">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-yellow-400 font-bold text-xs">💰 Cost Calculator</span>
+            <span id="costStatus" class="text-xs text-dim">idle</span>
           </div>
-          <p class="text-[10px] text-gray-500 mb-2">Scans for hedge words (might/could/possibly) → calculates confidence</p>
-          <code id="scorerCode" class="block text-[9px] text-pink-400 bg-bg p-2 rounded overflow-x-auto whitespace-nowrap">-</code>
+          <div id="costCode" class="text-[8px] text-pink-400 bg-bg p-2 rounded overflow-x-auto whitespace-nowrap mb-2 h-8">-</div>
+          <div id="costResult" class="text-xs text-dim">-</div>
+        </div>
+
+        <!-- Confidence Scorer -->
+        <div id="scorerPanel" class="bg-card border border-border rounded-lg p-3">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-purple-400 font-bold text-xs">🎯 Confidence Scorer</span>
+            <span id="scorerStatus" class="text-xs text-dim">idle</span>
+          </div>
+          <div id="scorerCode" class="text-[8px] text-pink-400 bg-bg p-2 rounded overflow-x-auto whitespace-nowrap mb-2 h-8">-</div>
+          <div id="scorerResult" class="text-xs text-dim">-</div>
+        </div>
+
+        <!-- Stats -->
+        <div class="bg-surface border border-border rounded-lg p-3">
+          <h3 class="text-xs font-bold text-dim mb-2">Response Stats</h3>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div><span class="text-dim">Time:</span> <span id="statTime" class="text-accent">-</span></div>
+            <div><span class="text-dim">Tokens:</span> <span id="statTokens" class="text-accent">-</span></div>
+            <div><span class="text-dim">Cost:</span> <span id="statCost" class="text-accent">-</span></div>
+            <div><span class="text-dim">Confidence:</span> <span id="statConfidence" class="text-accent">-</span></div>
+          </div>
         </div>
       </div>
     </div>
-  </main>
 
-  <!-- FOOTER -->
-  <footer class="border-t border-border mt-4">
-    <div class="max-w-6xl mx-auto px-6 py-4 text-[10px] text-gray-500">
-      <span class="text-accent">✓</span> BF does real work (routing/parsing/scoring) | 
-      <span class="text-accent">✓</span> Multi-model (Perplexity/GPT/Mistral) | 
-      <span class="text-accent">✓</span> Confidence scoring for hallucination awareness
-    </div>
-  </footer>
+    <!-- Footer -->
+    <footer class="text-center py-4 mt-6 border-t border-border text-xs text-dim">
+      <p>Brainfuck handles: Model Routing • Token Counting • Cost Calculation • Confidence Scoring</p>
+      <a href="https://github.com/abhinxx/brainchat-mvp" target="_blank" class="text-accent hover:underline">View Source on GitHub →</a>
+    </footer>
+  </div>
 
   <script src="/app.js"></script>
 </body>

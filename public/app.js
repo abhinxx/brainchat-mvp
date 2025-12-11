@@ -2,21 +2,22 @@ const chatBox = document.getElementById('chatBox');
 const chatForm = document.getElementById('chatForm');
 const queryInput = document.getElementById('queryInput');
 const apiKeyInput = document.getElementById('apiKeyInput');
+const modelSelect = document.getElementById('modelSelect');
 const saveKeyBtn = document.getElementById('saveKeyBtn');
 const keyStatus = document.getElementById('keyStatus');
 
-// Load saved API key
+// Load saved state
 const savedKey = localStorage.getItem('openrouter_key');
 if (savedKey) {
   apiKeyInput.value = savedKey;
-  keyStatus.textContent = '✓ saved';
+  keyStatus.textContent = '✓ Key saved';
 }
 
 saveKeyBtn.addEventListener('click', () => {
   const key = apiKeyInput.value.trim();
   if (key) {
     localStorage.setItem('openrouter_key', key);
-    keyStatus.textContent = '✓ saved';
+    keyStatus.textContent = '✓ Key saved';
   }
 });
 
@@ -24,9 +25,10 @@ chatForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const query = queryInput.value.trim();
   const apiKey = localStorage.getItem('openrouter_key');
+  const selectedModel = modelSelect.value;
   
   if (!apiKey) {
-    alert('Enter your OpenRouter API key first');
+    alert('Please enter your OpenRouter API key');
     return;
   }
   if (!query) return;
@@ -34,59 +36,35 @@ chatForm.addEventListener('submit', async (e) => {
   addMessage('user', query);
   queryInput.value = '';
   setLoading(true);
-
-  setPanel('router', 'scanning words...', '-', null);
-  setPanel('parser', 'waiting...', '-', null);
-  setPanel('scorer', 'waiting...', '-', null);
+  updatePanels('processing');
 
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, apiKey })
+      body: JSON.stringify({ query, apiKey, selectedModel })
     });
     const data = await res.json();
 
     if (data.error) {
       addMessage('error', data.error);
-      setPanel('router', 'error', '-', null);
-      setPanel('parser', 'error', '-', null);
-      setPanel('scorer', 'error', '-', null);
+      updatePanels('error');
     } else {
-      // Show word scanning results
-      const scans = data.bf.router.scans || [];
-      const matchedWord = data.matchedWord;
-      
-      // Build scan visualization
-      let scanHtml = '<div class="text-xs space-y-1">';
-      scans.forEach(s => {
-        const isMatch = s.word === matchedWord;
-        const cls = isMatch ? 'text-accent font-bold bg-accent/20 px-1 rounded' : 'text-gray-500';
-        scanHtml += `<span class="${cls}">${s.word}</span> `;
-      });
-      scanHtml += '</div>';
-      
-      if (matchedWord) {
-        scanHtml += `<div class="mt-2 text-accent text-sm">✓ Matched: "${matchedWord}" → ${data.model}</div>`;
-      } else {
-        scanHtml += `<div class="mt-2 text-gray-400 text-sm">No keyword match → ${data.model} (default)</div>`;
-      }
-      
-      document.getElementById('routerOutput').innerHTML = `<span class="text-accent">→ ${data.model}</span>`;
-      document.getElementById('routerCode').textContent = data.bf.router.code.slice(0, 80) + '...';
-      document.getElementById('routerScans').innerHTML = scanHtml;
+      // Update BF panels
+      updateRouterPanel(data.bf?.router, data.model);
+      updateTokenPanel(data.bf?.tokenCounter, data.stats);
+      updateCostPanel(data.bf?.costCalc, data.stats);
+      updateScorerPanel(data.bf?.scorer, data.confidence);
+      updateStats(data.stats, data.confidence);
 
-      setPanel('parser', '✓ parsed', data.bf.parser.code.slice(0, 60) + '...', null);
-      setPanel('scorer', `${data.confidence}%`, data.bf.scorer.code.slice(0, 60) + '...', null);
-
-      addMessage('assistant', data.text, data.emoji, data.model, data.confidence);
+      addMessage('assistant', data.response, data.model, data.confidence);
     }
   } catch (err) {
     addMessage('error', err.message);
+    updatePanels('error');
   }
 
   setLoading(false);
-  queryInput.focus();
 });
 
 function setLoading(loading) {
@@ -94,35 +72,99 @@ function setLoading(loading) {
   document.querySelector('button[type="submit"]').disabled = loading;
 }
 
-function setPanel(name, status, code, tape) {
-  const statusEl = document.getElementById(`${name}Output`);
-  const codeEl = document.getElementById(`${name}Code`);
-  
-  if (statusEl) {
-    const cls = status.includes('error') ? 'text-red-400' : 'text-accent';
-    statusEl.innerHTML = `<span class="${cls}">${status}</span>`;
-  }
-  if (codeEl && code) {
-    codeEl.textContent = code;
-  }
+function updatePanels(status) {
+  const panels = ['router', 'token', 'cost', 'scorer'];
+  panels.forEach(p => {
+    document.getElementById(`${p}Status`).textContent = status;
+    if (status === 'processing') {
+      document.getElementById(`${p}Code`).textContent = 'executing...';
+    }
+  });
 }
 
-function addMessage(role, text, emoji = '', model = '', confidence = '') {
+function updateRouterPanel(router, model) {
+  if (!router) {
+    document.getElementById('routerStatus').textContent = 'manual';
+    document.getElementById('routerResult').textContent = `Model: ${model} (manually selected)`;
+    return;
+  }
+  
+  document.getElementById('routerStatus').textContent = `→ ${router.output || 'M'}`;
+  
+  // Show scanned words
+  let html = '';
+  if (router.scans) {
+    router.scans.forEach(s => {
+      const isMatch = s.word === router.matchedKeyword;
+      const cls = isMatch ? 'text-accent font-bold' : 'text-dim';
+      html += `<span class="${cls}">${s.word}</span> `;
+    });
+  }
+  
+  if (router.matchedKeyword) {
+    html += `<br><span class="text-accent">✓ Matched "${router.matchedKeyword}" → ${model}</span>`;
+  } else {
+    html += `<br><span class="text-dim">No keyword match → ${model} (default)</span>`;
+  }
+  
+  document.getElementById('routerResult').innerHTML = html;
+  document.getElementById('routerCode').textContent = ',>,>,...[->>>>+>+<<<<<]...';
+}
+
+function updateTokenPanel(tokenCounter, stats) {
+  document.getElementById('tokenStatus').textContent = `${stats?.totalTokens || 0} tokens`;
+  document.getElementById('tokenResult').textContent = `Prompt: ${stats?.promptTokens || 0} | Completion: ${stats?.completionTokens || 0}`;
+  document.getElementById('tokenCode').textContent = ',[->>+<<]>>[->+<]...';
+}
+
+function updateCostPanel(costCalc, stats) {
+  const cost = stats?.estimatedCost || 0;
+  const tier = cost > 0.01 ? '$$$' : cost > 0.001 ? '$$' : '$';
+  document.getElementById('costStatus').textContent = tier;
+  document.getElementById('costResult').textContent = `≈ $${cost.toFixed(6)}`;
+  document.getElementById('costCode').textContent = ',[->+>+<<]>>[-<<+>>]...';
+}
+
+function updateScorerPanel(scorer, confidence) {
+  document.getElementById('scorerStatus').textContent = `${confidence}%`;
+  
+  let color = 'text-green-400';
+  if (confidence < 50) color = 'text-red-400';
+  else if (confidence < 75) color = 'text-yellow-400';
+  
+  document.getElementById('scorerResult').innerHTML = `<span class="${color}">Confidence: ${confidence}%</span>`;
+  document.getElementById('scorerCode').textContent = '>>+++++++++<<,[[->>--<<]...]';
+}
+
+function updateStats(stats, confidence) {
+  document.getElementById('statTime').textContent = `${stats?.totalTime || 0}ms`;
+  document.getElementById('statTokens').textContent = stats?.totalTokens || 0;
+  document.getElementById('statCost').textContent = `$${(stats?.estimatedCost || 0).toFixed(6)}`;
+  document.getElementById('statConfidence').textContent = `${confidence}%`;
+}
+
+function addMessage(role, text, model = '', confidence = '') {
   const div = document.createElement('div');
   
   if (role === 'user') {
-    div.className = 'p-2 bg-bg border-l-2 border-accent rounded text-sm';
-    div.innerHTML = `<span class="text-gray-300">${escapeHtml(text)}</span>`;
+    div.className = 'p-3 bg-card border-l-2 border-accent rounded';
+    div.innerHTML = `<p class="text-gray-200">${escapeHtml(text)}</p>`;
   } else if (role === 'error') {
-    div.className = 'p-2 bg-red-900/20 border-l-2 border-red-500 rounded text-sm';
-    div.innerHTML = `<span class="text-red-400">Error: ${escapeHtml(text)}</span>`;
+    div.className = 'p-3 bg-red-900/30 border-l-2 border-red-500 rounded';
+    div.innerHTML = `<p class="text-red-400">Error: ${escapeHtml(text)}</p>`;
   } else {
-    div.className = 'p-2 bg-bg border-l-2 border-gray-600 rounded text-sm';
+    div.className = 'p-3 bg-surface border-l-2 border-dim rounded';
+    
+    let confidenceColor = 'text-green-400';
+    if (confidence < 50) confidenceColor = 'text-red-400';
+    else if (confidence < 75) confidenceColor = 'text-yellow-400';
+    
     div.innerHTML = `
-      <div class="text-[10px] text-gray-500 mb-1">via ${model}</div>
-      ${emoji ? `<div class="text-xl mb-1">${emoji}</div>` : ''}
-      <div class="text-gray-300">${escapeHtml(text)}</div>
-      <div class="text-[10px] text-accent mt-1">${confidence}% confidence</div>
+      <div class="flex justify-between items-center mb-2">
+        <span class="text-xs text-accent">${model}</span>
+        <span class="text-xs ${confidenceColor}">${confidence}% confidence</span>
+      </div>
+      <p class="text-gray-200 whitespace-pre-wrap">${escapeHtml(text)}</p>
     `;
   }
   

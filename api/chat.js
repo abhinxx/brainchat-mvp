@@ -5,74 +5,84 @@ const path = require('path');
 // Load BF files
 const BF_DIR = path.join(__dirname, '..', 'bf');
 
-function extractBF(source) {
-  return source.replace(/[^><+\-.,\[\]]/g, '');
+function loadBF(filename) {
+  try {
+    const source = fs.readFileSync(path.join(BF_DIR, filename), 'utf8');
+    return source.replace(/[^><+\-.,\[\]]/g, '');
+  } catch (e) {
+    return '';
+  }
 }
 
-let ROUTER_CODE = '', PARSER_CODE = '', SCORER_CODE = '';
-let initError = null;
-
-try {
-  ROUTER_CODE = extractBF(fs.readFileSync(path.join(BF_DIR, 'model_router.bf'), 'utf8'));
-  PARSER_CODE = extractBF(fs.readFileSync(path.join(BF_DIR, 'response_parser.bf'), 'utf8'));
-  SCORER_CODE = extractBF(fs.readFileSync(path.join(BF_DIR, 'confidence_scorer.bf'), 'utf8'));
-} catch (e) {
-  initError = 'Failed to load BF files: ' + e.message;
-}
+const ROUTER_CODE = loadBF('model_router.bf');
+const SCORER_CODE = loadBF('confidence_scorer.bf');
+const TOKEN_COUNTER_CODE = loadBF('token_counter.bf');
+const COST_CALC_CODE = loadBF('cost_calculator.bf');
 
 const MODELS = {
-  'P': 'perplexity/sonar-pro',
-  'C': 'openai/gpt-4o-mini',
-  'M': 'mistralai/mistral-large-latest'
+  'auto': null, // BF decides
+  'perplexity': { id: 'perplexity/sonar-pro', name: 'Perplexity' },
+  'chatgpt': { id: 'openai/gpt-4o-mini', name: 'ChatGPT' },
+  'mistral': { id: 'mistralai/mistral-large-latest', name: 'Mistral' }
 };
 
-const MODEL_NAMES = {
-  'P': 'Perplexity',
-  'C': 'ChatGPT', 
-  'M': 'Mistral'
-};
+// Critical thinking system prompt
+const SYSTEM_PROMPT = `You are a critical thinking assistant. Be precise and analytical.
+When uncertain, explicitly state your confidence level.
+Use phrases like "I believe", "It's likely", "I'm uncertain" when appropriate.
+Provide balanced perspectives when topics are debatable.
+Be concise but thorough.`;
 
 module.exports = async function handler(req, res) {
-  if (initError) {
-    return res.status(500).json({ error: initError });
-  }
-
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { query, apiKey } = req.body || {};
+  const { query, apiKey, selectedModel = 'auto' } = req.body || {};
   if (!query) return res.status(400).json({ error: 'No query' });
   if (!apiKey) return res.status(400).json({ error: 'No API key' });
 
+  const startTime = Date.now();
+
   try {
-    // BF Router - scan each word
-    const words = query.toLowerCase().split(/\s+/);
-    let matchedWord = null;
-    let modelKey = 'M';
-    let routerOutput = '';
-    let allScans = [];
+    let modelId, modelName, routerResult = null, matchedKeyword = null;
 
-    for (const word of words) {
-      const wordChars = (word + '     ').slice(0, 5);
-      const result = runBF(ROUTER_CODE, wordChars);
-      const output = result.output || 'M';
-      allScans.push({ word, output: output.trim() });
-      
-      if (output.includes('C') && !matchedWord) {
-        matchedWord = word;
-        modelKey = 'C';
-        routerOutput = output;
-      } else if (output.includes('P') && !matchedWord) {
-        matchedWord = word;
-        modelKey = 'P';
-        routerOutput = output;
+    if (selectedModel === 'auto') {
+      // BF Router decides - scan each word
+      const words = query.toLowerCase().split(/\s+/);
+      let routerOutput = '';
+      let allScans = [];
+
+      for (const word of words) {
+        // Pass first 6 chars of each word to BF
+        const input = (word + '      ').slice(0, 6);
+        const result = runBF(ROUTER_CODE, input);
+        allScans.push({ word, output: result.output, steps: result.steps });
+        
+        if (result.output.includes('P') && !matchedKeyword) {
+          matchedKeyword = word;
+          routerOutput = 'P';
+        } else if (result.output.includes('C') && !matchedKeyword) {
+          matchedKeyword = word;
+          routerOutput = 'C';
+        }
       }
-    }
 
-    if (!routerOutput) routerOutput = 'M';
-    const model = MODELS[modelKey] || MODELS['M'];
-    const modelName = MODEL_NAMES[modelKey] || 'Mistral';
+      // Default to Mistral if no match
+      if (!routerOutput) routerOutput = 'M';
+      
+      const modelMap = { 'P': 'perplexity', 'C': 'chatgpt', 'M': 'mistral' };
+      const selected = MODELS[modelMap[routerOutput] || 'mistral'];
+      modelId = selected.id;
+      modelName = selected.name;
+      
+      routerResult = { scans: allScans, output: routerOutput, matchedKeyword };
+    } else {
+      // Manual selection
+      const selected = MODELS[selectedModel] || MODELS['mistral'];
+      modelId = selected.id;
+      modelName = selected.name;
+    }
 
     // Call OpenRouter API
     const llmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -84,17 +94,15 @@ module.exports = async function handler(req, res) {
         'X-Title': 'BrainChat'
       },
       body: JSON.stringify({
-        model,
+        model: modelId,
         messages: [
-          {
-            role: 'system',
-            content: 'Respond in TWO parts:\n1. EMOJI: Answer in emoji only\n2. TEXT: Same answer in plain text\n\nFormat:\nEMOJI: [emojis]\nTEXT: [text]'
-          },
+          { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: query }
         ]
       })
     });
 
+    const timeToFirstToken = Date.now() - startTime;
     const responseText = await llmRes.text();
     
     let llmData;
@@ -103,50 +111,51 @@ module.exports = async function handler(req, res) {
     } catch (e) {
       return res.status(500).json({ 
         error: 'API error',
-        status: llmRes.status,
-        response: responseText.slice(0, 200)
+        details: responseText.slice(0, 200)
       });
     }
 
     if (llmData.error) {
-      return res.status(500).json({ error: llmData.error.message || JSON.stringify(llmData.error) });
+      return res.status(500).json({ error: llmData.error.message });
     }
 
-    const raw = llmData.choices?.[0]?.message?.content || '';
+    const response = llmData.choices?.[0]?.message?.content || '';
+    const usage = llmData.usage || {};
+    const totalTime = Date.now() - startTime;
 
-    // BF Parser
-    const parserResult = runBF(PARSER_CODE, raw.slice(0, 50));
+    // BF Token Counter - count words in response
+    const tokenResult = runBF(TOKEN_COUNTER_CODE, response.slice(0, 200));
+    
+    // BF Cost Calculator - estimate based on token count
+    const costInput = String(usage.total_tokens || 0).slice(0, 10);
+    const costResult = runBF(COST_CALC_CODE, costInput);
 
-    // Extract emoji/text
-    let emoji = '', text = raw;
-    const em = raw.match(/EMOJI:\s*(.+)/i);
-    const tx = raw.match(/TEXT:\s*(.+)/is);
-    if (em) emoji = em[1].trim();
-    if (tx) text = tx[1].trim();
-
-    // BF Scorer
-    const scorerResult = runBF(SCORER_CODE, text.slice(0, 50));
-
-    // Confidence
-    const hedges = ['might', 'could', 'possibly', 'maybe', 'perhaps', 'generally', 'usually', 'typically', 'likely', 'probably'];
-    const hedgeCount = hedges.filter(w => text.toLowerCase().includes(w)).length;
-    const confidence = Math.max(0, 100 - hedgeCount * 15);
+    // BF Confidence Scorer
+    const scorerResult = runBF(SCORER_CODE, response.slice(0, 100));
+    
+    // Calculate confidence from hedge words + BF output
+    const hedgeWords = ['believe', 'likely', 'uncertain', 'perhaps', 'maybe', 'possibly', 'might', 'could', 'probably', 'seems'];
+    const hedgeCount = hedgeWords.filter(w => response.toLowerCase().includes(w)).length;
+    const confidence = Math.max(10, 100 - hedgeCount * 12);
 
     return res.status(200).json({
+      response,
       model: modelName,
-      emoji,
-      text,
+      modelId,
+      stats: {
+        timeToFirstToken,
+        totalTime,
+        promptTokens: usage.prompt_tokens || 0,
+        completionTokens: usage.completion_tokens || 0,
+        totalTokens: usage.total_tokens || 0,
+        estimatedCost: (usage.total_tokens || 0) * 0.00001 // rough estimate
+      },
       confidence,
-      matchedWord,
       bf: {
-        router: { 
-          code: ROUTER_CODE.slice(0, 100), 
-          scans: allScans, 
-          output: routerOutput,
-          tape: allScans[0]?.tape
-        },
-        parser: { code: PARSER_CODE.slice(0, 100), output: parserResult.output },
-        scorer: { code: SCORER_CODE.slice(0, 100), output: scorerResult.output }
+        router: routerResult,
+        tokenCounter: { output: tokenResult.output, steps: tokenResult.steps },
+        costCalc: { output: costResult.output, steps: costResult.steps },
+        scorer: { output: scorerResult.output, steps: scorerResult.steps }
       }
     });
 
