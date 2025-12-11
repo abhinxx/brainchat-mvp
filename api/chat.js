@@ -48,28 +48,24 @@ module.exports = async function handler(req, res) {
     // === BF MODEL ROUTER ===
     if (selectedModel === 'auto') {
       const words = query.toLowerCase().split(/\s+/);
-      let routerOutput = 'M'; // Default
+      let routerOutput = '';
       let allScans = [];
 
       for (const word of words) {
-        if (word.length === 0) continue;
+        const input = (word + '      ').slice(0, 6);
+        const result = runBF(ROUTER_CODE, input);
+        allScans.push({ word, output: result.output, steps: result.steps });
         
-        // Pass only first char to BF - fast single-char detection
-        const firstChar = word[0];
-        const result = runBF(ROUTER_CODE, firstChar);
-        allScans.push({ word, char: firstChar, output: result.output.trim() });
-        
-        // BREAK IMMEDIATELY after finding a match
-        if (result.output.includes('P')) {
+        if (result.output.includes('P') && !matchedKeyword) {
           matchedKeyword = word;
           routerOutput = 'P';
-          break;
-        } else if (result.output.includes('C')) {
+        } else if (result.output.includes('C') && !matchedKeyword) {
           matchedKeyword = word;
           routerOutput = 'C';
-          break;
         }
       }
+
+      if (!routerOutput) routerOutput = 'M';
       
       const modelMap = { 'P': 'perplexity', 'C': 'chatgpt', 'M': 'mistral' };
       const selected = MODELS[modelMap[routerOutput] || 'mistral'];
