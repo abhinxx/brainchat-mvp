@@ -23,7 +23,7 @@ const MODELS = {
   'auto': null,
   'perplexity': { id: 'perplexity/sonar-pro', name: 'Perplexity' },
   'chatgpt': { id: 'openai/gpt-4o-mini', name: 'ChatGPT' },
-  'mistral': { id: 'mistralai/mistral-large-latest', name: 'Mistral' }
+  'mistral': { id: 'mistralai/mistral-medium-3.1', name: 'Mistral' }
 };
 
 const SYSTEM_PROMPT = `You are a critical thinking assistant. Be precise and analytical.
@@ -100,7 +100,10 @@ module.exports = async function handler(req, res) {
 
     if (!llmRes.ok) {
       const errorText = await llmRes.text();
-      return res.status(500).json({ error: `API error: ${errorText.slice(0, 200)}` });
+      return res.status(500).json({ 
+        error: `API error: ${errorText.slice(0, 200)}`,
+        bf: { router: routerResult }  // Include BF analysis even on API error
+      });
     }
 
     // === STREAMING: Measure REAL Time To First Token ===
