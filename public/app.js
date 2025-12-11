@@ -91,20 +91,20 @@ function updateRouterPanel(router, model) {
   
   document.getElementById('routerStatus').textContent = `→ ${router.output || 'M'}`;
   
-  // Show scanned words
+  // Show scanned words (escape to prevent XSS)
   let html = '';
   if (router.scans) {
     router.scans.forEach(s => {
       const isMatch = s.word === router.matchedKeyword;
       const cls = isMatch ? 'text-accent font-bold' : 'text-dim';
-      html += `<span class="${cls}">${s.word}</span> `;
+      html += `<span class="${cls}">${escapeHtml(s.word)}</span> `;
     });
   }
   
   if (router.matchedKeyword) {
-    html += `<br><span class="text-accent">✓ Matched "${router.matchedKeyword}" → ${model}</span>`;
+    html += `<br><span class="text-accent">✓ Matched "${escapeHtml(router.matchedKeyword)}" → ${escapeHtml(model)}</span>`;
   } else {
-    html += `<br><span class="text-dim">No keyword match → ${model} (default)</span>`;
+    html += `<br><span class="text-dim">No keyword match → ${escapeHtml(model)} (default)</span>`;
   }
   
   document.getElementById('routerResult').innerHTML = html;
